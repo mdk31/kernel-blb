@@ -1,4 +1,38 @@
 
+crossfit_estimator <- function(data, K){
+  assertthat::assert_that(is.integer(K))
+  if(data.table::is.data.table(data) == FALSE){
+    data <- data.table::as.data.table(data)
+  }
+  
+  fold_idx <- seq_len(nrow(data))
+  folds <- split(fold_idx, sample(rep(1:K, length.out = length(fold_idx))))
+  
+  crossfit_dt <- lapply(folds, function(test_idx){
+    train_idx <- setdiff(fold_idx, test_idx)
+    train_dat <- data[train_idx]
+    test_dat <- data[-train_idx]
+    
+    m <- svm(y ~ Tr + X1 + X2, data = train_dat, kernel = 'linear', type = 'eps-regression')
+    g <- svm(Tr ~ X1 + X2, data = train_dat, kernel = 'linear', type = 'C-classification', probability = TRUE)
+    
+    prop_score <- attr(predict(g, newdata = test_dat, probability = TRUE), 'probabilities')[, 1]
+    
+    newdata <- data.frame(Tr = 1, X1 = test_dat$X1, X2 = test_dat$X2)
+    m1 <- predict(m, newdata = newdata)
+    
+    newdata <- data.frame(Tr = 0, X1 = test_dat$X1, X2 = test_dat$X2)
+    m0 <- predict(m, newdata = newdata)
+    
+    test_dat$prop_score <- prop_score
+    test_dat$m1 <- m1
+    test_dat$m0 <- m0
+    
+    test_dat
+  })
+  return(rbindlist(crossfit))
+}
+
 
 kangschafer3 <- function(){
   X1 <- rnorm(n, 0, 1)
