@@ -58,7 +58,7 @@ if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
                             estim = mean(boot_reps),
                             se = mean(boot_reps))
       blb_out
-    }, cl = 1)
+    }, cl = 4)
     out <- rbindlist(out)
     out[, `:=`(n = n)]
     out
@@ -87,11 +87,11 @@ if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
     out <- pblapply(seq_len(replications), function(rp){
       set.seed(rp)
       dat <- kangschafer3(n = n, te = te, sigma = sigma, beta_overlap = 0.5)
-      crossfit <- crossfit_estimator(dat)
+      crossfit <- crossfit_estimator(dat, K = K)
       M <- rmultinom(n = B, size = n, prob = rep(1, n))
       return(causal_blb(data = dat, b = b, subsets = subsets))
       
-    }, cl = 1)
+    }, cl = 4)
     
     out <- rbindlist(out)
     out[, `:=`(n = n)]
