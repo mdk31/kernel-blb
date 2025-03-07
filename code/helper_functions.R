@@ -70,7 +70,7 @@ crossfit_estimator <- function(data, K = 10){
     
     test_dat
   })
-  return(rbindlist(crossfit))
+  return(rbindlist(crossfit_dt))
 }
 
 

@@ -58,7 +58,7 @@ if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
                             estim = mean(boot_reps),
                             se = mean(boot_reps))
       blb_out
-    }, cl = 4)
+    }, cl = 1)
     out <- rbindlist(out)
     out[, `:=`(n = n)]
     out
