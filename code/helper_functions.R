@@ -108,27 +108,27 @@ make_partition <- function(n, subsets, b, disjoint = TRUE){
   partition
 }
 
-zip_plots <- function(data, n, subsets = NULL, gamma = NULL){
+zip_plots <- function(data, n, use_case, subsets = NULL, gamma = NULL){
   assertthat::assert_that(!((is.null((subsets) & !is.null(gamma)) | (!is.null(subsets) & is.null(gamma)))))
   if(data.table::is.data.table(data) == FALSE){
     data <- data.table::as.data.table(data)
   }
-  nm_prefix <- paste0('zip_plot_n', n)
+  nm_prefix <- paste0(use_case, '_zip_plot_n', n)
   if(is.null(subsets)){
     nm <- paste0(nm_prefix, '_full.pdf')
+    title <- bquote(n == .(n))
     ggsub <- data[n == n]
+    label_sub <- zip_labels[n == n_val & subsets == subsets_val & gamma == gamma_val & B == 25]
+    
   } else{
+    nm <- paste0(nm_prefix, '_subset_', subsets, '_gamma_', gamma, '_cblb.pdf')
+    title <- bquote(paste(s == .(subsets_val), ' and ', gamma == .(gamma_val), ' and ', n == .(n_val)))
     ggsub <- data[n == n & subsets == subsets & gamma == gamma]
+    label_sub <- zip_labels[n == n_val & subsets == subsets_val & gamma == gamma_val & B == 25]
+    
   }
   for(row_idx in seq_len(nrow(value_grid))){
-    row <- value_grid[row_idx, ]
-    n_val <- row$n
-    gamma_val <- row$gamma
-    subsets_val <- row$subsets
-    nm <- paste0('zip_plot_n_', n_val, '_subset_', subsets_val, '_gamma_', gamma_val, '_B_25.pdf')
-    title <- bquote(paste(s == .(subsets_val), ' and ', gamma == .(gamma_val), ' and ', n == .(n_val)))
     ggsub <- ggdat[n == n_val & subsets == subsets_val & gamma == gamma_val & B == 25]
-    label_sub <- zip_labels[n == n_val & subsets == subsets_val & gamma == gamma_val & B == 25]
     p <- ggplot(ggsub, aes(y = rank)) +
       geom_segment(aes(x = lower_ci, y = rank, xend = upper_ci, yend = rank, color = covered)) +
       facet_grid(`Propensity Model` ~ `Outcome Model`, labeller = label_both) +

@@ -26,7 +26,7 @@ if(!file.exists(img_tmp_dir)){
 }
 
 # Values for simulations
-n_values <- c(10000, 50000)
+n_values <- c(10000)
 subset_values <- c(5, 10, 15)
 
 # FULL SIMULATIONS----
@@ -58,7 +58,7 @@ if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
                             estim = mean(boot_reps),
                             se = mean(boot_reps))
       blb_out
-    }, cl = 1)
+    }, cl = 4)
     out <- rbindlist(out)
     out[, `:=`(n = n)]
     out
