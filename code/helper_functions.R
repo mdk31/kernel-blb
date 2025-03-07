@@ -1,4 +1,10 @@
 
+calculate_gamma <- function(n, subsets){
+  soln <- 1 - log(subsets)/log(n)
+  return(truncate_to_n(soln, 5))
+}
+
+
 causal_blb <- function(data, b, subsets, disjoint = TRUE){
   assertthat::assert_that(is.integer(subsets))
   if(data.table::is.data.table(data) == FALSE){
