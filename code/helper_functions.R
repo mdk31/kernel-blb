@@ -1,5 +1,5 @@
 
-crossfit_estimator <- function(data, K){
+crossfit_estimator <- function(data, K = 10){
   assertthat::assert_that(is.integer(K))
   if(data.table::is.data.table(data) == FALSE){
     data <- data.table::as.data.table(data)
