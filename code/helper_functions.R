@@ -4,7 +4,6 @@ calculate_gamma <- function(n, subsets){
   return(truncate_to_n(soln, 5))
 }
 
-
 causal_blb <- function(data, b, subsets, disjoint = TRUE, K = 10){
   assertthat::assert_that(is.integer(subsets))
   if(data.table::is.data.table(data) == FALSE){
@@ -107,5 +106,43 @@ make_partition <- function(n, subsets, b, disjoint = TRUE){
     }, simplify = FALSE)
   }
   partition
+}
+
+zip_plots <- function(data, n, subsets = NULL, gamma = NULL){
+  assertthat::assert_that(!((is.null((subsets) & !is.null(gamma)) | (!is.null(subsets) & is.null(gamma)))))
+  if(data.table::is.data.table(data) == FALSE){
+    data <- data.table::as.data.table(data)
+  }
+  nm_prefix <- paste0('zip_plot_n', n)
+  if(is.null(subsets)){
+    nm <- paste0(nm_prefix, '_full.pdf')
+    ggsub <- data[n == n]
+  } else{
+    ggsub <- data[n == n & subsets == subsets & gamma == gamma]
+  }
+  for(row_idx in seq_len(nrow(value_grid))){
+    row <- value_grid[row_idx, ]
+    n_val <- row$n
+    gamma_val <- row$gamma
+    subsets_val <- row$subsets
+    nm <- paste0('zip_plot_n_', n_val, '_subset_', subsets_val, '_gamma_', gamma_val, '_B_25.pdf')
+    title <- bquote(paste(s == .(subsets_val), ' and ', gamma == .(gamma_val), ' and ', n == .(n_val)))
+    ggsub <- ggdat[n == n_val & subsets == subsets_val & gamma == gamma_val & B == 25]
+    label_sub <- zip_labels[n == n_val & subsets == subsets_val & gamma == gamma_val & B == 25]
+    p <- ggplot(ggsub, aes(y = rank)) +
+      geom_segment(aes(x = lower_ci, y = rank, xend = upper_ci, yend = rank, color = covered)) +
+      facet_grid(`Propensity Model` ~ `Outcome Model`, labeller = label_both) +
+      geom_vline(aes(xintercept = te), color = 'yellow', size = 0.5, linetype = 'dashed') +
+      ylab('Fractional Centile of |z|') +
+      xlab('95% Confidence Intervals') +
+      theme_bw() +
+      scale_y_continuous(breaks = c(5, 50, 95)) +
+      scale_color_discrete(name = "Coverage") +
+      geom_text(x = 0.75, y = 50, aes(label = perc_cover), data = label_sub, size = 4) +
+      ggtitle(title)
+    
+    print(p)
+    ggsave(file.path(image_path, nm), height = 9, width = 7)
+  }
 }
 
