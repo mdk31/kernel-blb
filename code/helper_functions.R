@@ -76,7 +76,7 @@ crossfit_estimator <- function(data, K = 10){
 }
 
 
-kangschafer3 <- function(){
+kangschafer3 <- function(n, te, sigma, beta_overlap = 0.5){
   X1 <- rnorm(n, 0, 1)
   X2 <- rnorm(n, 0, 1)
   prt <- 1/(1 + exp(-beta_overlap*(X1 + X2)))

@@ -57,7 +57,7 @@ if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
                             estim = mean(boot_reps),
                             se = mean(boot_reps))
       blb_out
-    }, cl = 4)
+    }, cl = 1)
     out <- rbindlist(out)
     out[, `:=`(n = n)]
     out
@@ -77,7 +77,7 @@ if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
   cblb <- readRDS(file.path(temp_dir, 'cblb_bootstrap.rds'))
 } else{
   cblb <- lapply(seq_row, function(i){
-    grid_val <- hyper_grid[i]
+    grid_val <- grid_vals[i]
     n <- grid_val$n
     subsets <- grid_val$subsets
     gamma <- grid_val$gamma
@@ -89,7 +89,8 @@ if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
       crossfit <- crossfit_estimator(dat)
       M <- rmultinom(n = B, size = n, prob = rep(1, n))
       return(causal_blb(data = dat, b = b, subsets = subsets))
-    }, cl = 4)
+      
+    }, cl = 1)
     
     out <- rbindlist(out)
     out[, `:=`(n = n)]
