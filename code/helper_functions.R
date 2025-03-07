@@ -1,4 +1,39 @@
 
+causal_blb <- function(data, b, subsets, disjoint = TRUE){
+  assertthat::assert_that(is.integer(subsets))
+  if(data.table::is.data.table(data) == FALSE){
+    data <- data.table::as.data.table(data)
+  }
+  n <- nrow(data)
+  partitions <- make_partition(n = n, subsets = subsets, b = b, disjoint = disjoint)
+  idx <- seq_len(b)
+  
+  blb_out <- lapply(partitions, function(i){
+    tmp_dat <- dat[i]
+    folds <- split(idx, sample(rep(1:K, length.out = length(idx))))
+    crossfit <- crossfit_estimator(data = tmp_dat)
+
+    M <- rmultinom(n = B, size = n, prob = rep(1, b))
+    blb_reps <- sapply(seq_len(B), function(bt){
+      phi1 <- M[, bt]*((crossfit$Tr/crossfit$prop_score)*(crossfit$y - crossfit$m1) + crossfit$m1)
+      phi0 <- M[, bt]*((1 - crossfit$Tr)/(1 - crossfit$prop_score)*(crossfit$y - crossfit$m0) + crossfit$m0)
+      sum(phi1)/n - sum(phi0)/n
+    })
+    
+    perc_ci <- boot:::perc.ci(blb_reps)
+    return(data.table(lower_ci = perc_ci[4],
+                      upper_ci = perc_ci[5],
+                      estim = mean(blb_reps),
+                      se = sd(blb_reps)))
+  })
+  
+  blb_out <- rbindlist(blb_out)
+  blb_out <- blb_out[, .(lower_ci = mean(lower_ci),
+                         upper_ci = mean(upper_ci),
+                         estim = mean(estim),
+                         se = mean(se))]
+  return(blb_out)
+}
 
 crossfit_estimator <- function(data, K = 10){
   assertthat::assert_that(is.integer(K))
