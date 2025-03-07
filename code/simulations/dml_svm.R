@@ -69,7 +69,7 @@ if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
 
 
 # cBLB SIMULATIONS----
-if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
+if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
   cblb <- readRDS(file.path(temp_dir, 'full_bootstrap.rds'))
 } else{
   cblb <- lapply(seq_row, function(i){

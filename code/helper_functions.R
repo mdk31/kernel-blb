@@ -1,4 +1,5 @@
 
+
 crossfit_estimator <- function(data, K = 10){
   assertthat::assert_that(is.integer(K))
   if(data.table::is.data.table(data) == FALSE){
@@ -49,6 +50,22 @@ kangschafer3 <- function(){
   return(out)
 }
 
-causalblb <- function(){
-  
+make_partition <- function(n, subsets, b, disjoint = TRUE){
+  part_idx <- seq(1, n, by = 1)
+  if(disjoint){
+    # Generate disjoint sets
+    # Permute indices
+    partition <- sample(part_idx, n)
+    totality <- b*subsets
+    stopifnot(totality <= n)
+    # Exclude rest of sample
+    partition <- partition[1:totality]
+    partition <- split(partition, f = rep(1:subsets, each = b))
+  } else{
+    partition <- replicate(subsets, {
+      sample(part_idx, size = b, replace = FALSE)
+    }, simplify = FALSE)
+  }
+  partition
 }
+
