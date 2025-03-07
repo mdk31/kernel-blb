@@ -31,8 +31,8 @@ B_vals <- 100 #bootstrap resamples
 
 
 # FULL SIMULATIONS----
-if(file.exists(file.path(temp_dir, 'full_coverage.rds'))){
-  cblb <- readRDS(file.path(temp_dir, 'full_coverage.rds'))
+if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
+  cblb <- readRDS(file.path(temp_dir, 'full_bootstrap.rds'))
 } else{
   cblb <- lapply(seq_row, function(i){
     grid_val <- hyper_grid[i]
@@ -90,5 +90,5 @@ if(file.exists(file.path(temp_dir, 'full_coverage.rds'))){
     out
   })
   cblb <- rbindlist(cblb)
-  saveRDS(cblb, file.path(temp_dir, 'full_coverage.rds'))
+  saveRDS(cblb, file.path(temp_dir, 'full_bootstrap.rds'))
 }
