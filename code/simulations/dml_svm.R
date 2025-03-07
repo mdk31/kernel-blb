@@ -7,7 +7,7 @@ te <- 0.8
 sigma <- 1
 replications <- 1000
 K <- 10
-r <- 100
+B <- 100 #bootstrap resamples
 
 base_nm <- 'svm_dml'
 image_path <- 'images'
@@ -27,18 +27,18 @@ if(!file.exists(img_tmp_dir)){
 # Values for simulations
 n_values <- c(10000, 50000)
 subset_values <- c(5, 10, 15)
-B_vals <- 100 #bootstrap resamples
-
 
 # FULL SIMULATIONS----
+grid_vals <- as.data.table(expand.grid(n = n_values))
+seq_row <- seq_len(nrow(grid_vals))
+
 if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
   cblb <- readRDS(file.path(temp_dir, 'full_bootstrap.rds'))
 } else{
   cblb <- lapply(seq_row, function(i){
-    grid_val <- hyper_grid[i]
+    grid_val <- grid_vals[i]
     n <- grid_val$n
-    B <- grid_val$B
-    
+
     out <- pblapply(seq_len(replications), function(rp){
       set.seed(rp)
       dat <- kangschafer3(n = n, te = te, sigma = sigma, beta_overlap = 0.5)
@@ -59,8 +59,7 @@ if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
       blb_out
     }, cl = 4)
     out <- rbindlist(out)
-    out[, `:=`(n = n,
-               B = B)]
+    out[, `:=`(n = n)]
     out
   })
   cblb <- rbindlist(cblb)
@@ -69,13 +68,17 @@ if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
 
 
 # cBLB SIMULATIONS----
+grid_vals <- as.data.table(expand.grid(n = n_values,
+                         subsets = subset_values))
+grid_vals[, `:=`(gamma = calculate_gamma(n, subsets))]
+seq_row <- seq_len(nrow(grid_vals))
+
 if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
   cblb <- readRDS(file.path(temp_dir, 'cblb_bootstrap.rds'))
 } else{
   cblb <- lapply(seq_row, function(i){
     grid_val <- hyper_grid[i]
     n <- grid_val$n
-    B <- grid_val$B
     subsets <- grid_val$subsets
     gamma <- grid_val$gamma
     b <- round(n^gamma)
@@ -89,8 +92,7 @@ if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
     }, cl = 4)
     
     out <- rbindlist(out)
-    out[, `:=`(n = n,
-               B = B)]
+    out[, `:=`(n = n)]
     out
   })
   cblb <- rbindlist(cblb)
