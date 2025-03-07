@@ -5,7 +5,7 @@ calculate_gamma <- function(n, subsets){
 }
 
 
-causal_blb <- function(data, b, subsets, disjoint = TRUE){
+causal_blb <- function(data, b, subsets, disjoint = TRUE, K = 10){
   assertthat::assert_that(is.integer(subsets))
   if(data.table::is.data.table(data) == FALSE){
     data <- data.table::as.data.table(data)
@@ -17,7 +17,7 @@ causal_blb <- function(data, b, subsets, disjoint = TRUE){
   blb_out <- lapply(partitions, function(i){
     tmp_dat <- dat[i]
     folds <- split(idx, sample(rep(1:K, length.out = length(idx))))
-    crossfit <- crossfit_estimator(data = tmp_dat)
+    crossfit <- crossfit_estimator(data = tmp_dat, K = K)
 
     M <- rmultinom(n = B, size = n, prob = rep(1, b))
     blb_reps <- sapply(seq_len(B), function(bt){
@@ -42,7 +42,6 @@ causal_blb <- function(data, b, subsets, disjoint = TRUE){
 }
 
 crossfit_estimator <- function(data, K = 10){
-  assertthat::assert_that(is.integer(K))
   if(data.table::is.data.table(data) == FALSE){
     data <- data.table::as.data.table(data)
   }

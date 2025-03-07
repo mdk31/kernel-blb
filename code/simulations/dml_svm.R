@@ -1,5 +1,5 @@
-
-# TODO: Create function that calculates gamma given n and subset
+library(pbapply)
+library(data.table)
 source('code/helper_functions.R')
 
 
@@ -42,7 +42,7 @@ if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
     out <- pblapply(seq_len(replications), function(rp){
       set.seed(rp)
       dat <- kangschafer3(n = n, te = te, sigma = sigma, beta_overlap = 0.5)
-      crossfit <- crossfit_estimator(dat)
+      crossfit <- crossfit_estimator(dat, K = K)
       M <- rmultinom(n = B, size = n, prob = rep(1, n))
       
       boot_reps <- sapply(seq_len(B), function(bt){
