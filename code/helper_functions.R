@@ -54,8 +54,8 @@ crossfit_estimator <- function(data, K = 10){
     train_dat <- data[train_idx]
     test_dat <- data[-train_idx]
     
-    m <- svm(y ~ Tr + X1 + X2, data = train_dat, kernel = 'linear', type = 'eps-regression')
-    g <- svm(Tr ~ X1 + X2, data = train_dat, kernel = 'linear', type = 'C-classification', probability = TRUE)
+    m <- e1071::svm(y ~ Tr + X1 + X2, data = train_dat, kernel = 'linear', type = 'eps-regression')
+    g <- e1071::svm(Tr ~ X1 + X2, data = train_dat, kernel = 'linear', type = 'C-classification', probability = TRUE)
     
     prop_score <- attr(predict(g, newdata = test_dat, probability = TRUE), 'probabilities')[, 1]
     
