@@ -128,24 +128,24 @@ zip_plots <- function(data, zip_labels, n, use_case, image_path, subsets = NULL,
     label_sub <- zip_labels[n == n & subsets == subsets & gamma == gamma]
   }
   
-  p <- ggplot(ggsub, aes(y = rank)) +
-    geom_segment(aes(x = lower_ci, y = rank, xend = upper_ci, yend = rank, color = covered)) +
-    geom_vline(aes(xintercept = te), color = 'yellow', size = 0.5, linetype = 'dashed') +
-    ylab('Fractional Centile of |z|') +
-    xlab('95% Confidence Intervals') +
-    theme_bw() +
-    scale_y_continuous(breaks = c(5, 50, 95)) +
-    scale_color_discrete(name = "Coverage") +
-    geom_text(x = 0.75, y = 50, aes(label = perc_cover), data = label_sub, size = 4) +
-    ggtitle(title)
+  p <- ggplot2::ggplot(ggsub, ggplot2::aes(y = rank)) +
+    ggplot2::geom_segment(ggplot2::aes(x = lower_ci, y = rank, xend = upper_ci, yend = rank, color = covered)) +
+    ggplot2::geom_vline(ggplot2::aes(xintercept = te), color = 'yellow', size = 0.5, linetype = 'dashed') +
+    ggplot2::ylab('Fractional Centile of |z|') +
+    ggplot2::xlab('95% Confidence Intervals') +
+    ggplot2::theme_bw() +
+    ggplot2::scale_y_continuous(breaks = c(5, 50, 95)) +
+    ggplot2::scale_color_discrete(name = "Coverage") +
+    ggplot2::geom_text(x = 0.75, y = 50, ggplot2::aes(label = perc_cover), data = label_sub, size = 4) +
+    ggplot2::ggtitle(title)
   
   if(is.null(subsets)){
-    p <- p + facet_grid(n ~ ., labeller = label_both)
+    p <- p + ggplot2::facet_grid(n ~ ., labeller = ggplot2::label_both)
   } else{
-    p <- p + facet_grid(n ~ subsets, labeller = label_both)
+    p <- p + ggplot2::facet_grid(n ~ subsets, labeller = ggplot2::label_both)
   }
   
-  ggsave(file.path(image_path, nm), plot = p, height = 9, width = 7)
+  ggplot2::ggsave(file.path(image_path, nm), plot = p, height = 9, width = 7)
 }
 
 zip_plots_helper <- function(data, type){
