@@ -43,20 +43,21 @@ if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
       set.seed(rp)
       dat <- kangschafer3(n = n, te = te, sigma = sigma, beta_overlap = 0.5)
       output <- kernel_weights(dat,degree1,degree2,k1,k2,operator,penal)
+      phi1 <- output$phi1
+      phi0 <- output$phi0
       M <- rmultinom(n = B, size = n, prob = rep(1, n))
       
       boot_reps <- sapply(seq_len(B), function(bt){
-        phi1 <- M[, bt]*((crossfit$Tr/crossfit$prop_score)*(crossfit$y - crossfit$m1) + crossfit$m1)
-        phi0 <- M[, bt]*((1 - crossfit$Tr)/(1 - crossfit$prop_score)*(crossfit$y - crossfit$m0) + crossfit$m0)
-        sum(phi1)/n - sum(phi0)/n
+        boot_phi1 <- M[, bt]*phi1
+        boot_phi0 <- M[, bt]*phi0
+        mean(boot_phi1) - mean(boot_phi0)
       })
       
-      boot_ci <- boot:::perc.ci((boot_reps))
-      blb_out <- data.table(lower_ci = boot_ci[4],
-                            upper_ci = boot_ci[5],
-                            estim = mean(boot_reps),
-                            se = mean(boot_reps))
-      blb_out
+      perc_ci <- boot:::perc.ci(boot_reps)
+      return(data.table(lower_ci = perc_ci[4],
+                        upper_ci = perc_ci[5],
+                        estim = mean(boot_reps),
+                        se = sd(boot_reps)))
     }, cl = 4)
     out <- rbindlist(out)
     out[, `:=`(n = n)]
