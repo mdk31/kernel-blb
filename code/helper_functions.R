@@ -111,6 +111,21 @@ aipw_kernel_weights <- function(data, degree1, degree2, k1, k2, operator, penal,
   
 }
 
+aol_dgp <- function(n){
+  # Copied from paper
+  X <- lapply(1:5, function(i){
+    dt <- data.frame(runif(n, -1, 1))
+    names(dt) <- paste0('x', i)
+    dt
+  })
+  X <- do.call(cbind, X)
+  A <- ifelse(rbinom(n, size = 1, prob = 0.5) == 1, 1, -1)
+  mu_y <- 0.5 + as.matrix(X) %*% c(0.5, 0.8, 0.3, -0.5, 0.7) + A*(0.2 - 0.6*X$x1 - 0.8*X$x2)
+  y <- rnorm(n, mean = mu_y[, 1])
+  X$y <- y
+  X$A <- A
+  return(X)
+}
 
 calculate_gamma <- function(n, subsets){
   soln <- 1 - log(subsets)/log(n)
