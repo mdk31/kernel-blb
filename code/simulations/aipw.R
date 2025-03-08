@@ -42,7 +42,7 @@ if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
     out <- pblapply(seq_len(replications), function(rp){
       set.seed(rp)
       dat <- kangschafer3(n = n, te = te, sigma = sigma, beta_overlap = 0.5)
-      
+      output <- kernel_weights(dat,degree1,degree2,k1,k2,operator,penal)
       M <- rmultinom(n = B, size = n, prob = rep(1, n))
       
       boot_reps <- sapply(seq_len(B), function(bt){

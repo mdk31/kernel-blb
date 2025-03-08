@@ -1,3 +1,53 @@
+aipw_kernel_weights <- function(data, degree1, degree2, k1, k2, operator, penal, bootstrap_size=length(data)){
+  
+  intervention <- data$Tr
+  outcome <- data$y
+  confounders <- data.frame(data$X1,data$X2)
+  n <- nrow(data)
+  
+  t1 <- as.integer(intervention)
+  t0 <- as.integer((1-intervention))
+  y <- outcome
+  X <- data.frame(confounders, y, intervention)
+  
+  X1t <- X[X$intervention == 1, ]
+  X0t <- X[X$intervention == 0, ]
+  y1 <- y[X$intervention == 1]
+  y0 <- y[X$intervention == 0]
+  n1 <- sum(X$intervention == 1)
+  n0 <- sum(X$intervention == 0)
+  
+  mX0 <- as.matrix(X0t[, 1:(dim(X0t)[2]-2)])
+  mX1 <- as.matrix(X1t[, 1:(dim(X1t)[2]-2)])
+  mY0 <- as.matrix(y0)
+  mY1 <- as.matrix(y1)
+  
+  pyX0   <- np_array(np$array(mX0), dtype = "float")
+  pyX1   <- np_array(np$array(mX1), dtype = "float")
+  pyY0   <- np$array(mY0, dtype = "float")
+  pyY1   <- np$array(mY1, dtype = "float")
+  
+  res.optim2_0 <- tryCatch(gp(pyX0, pyY0,
+                                 degree1 = degree1,
+                                 degree2 = degree2,
+                                 k1 = k1,
+                                 k2 = k2,
+                                 operator = operator),
+                              error=function(e) NULL)
+  
+  res.optim2_1 <- tryCatch(gp(pyX1,pyY1,
+                                 degree1 = degree1,
+                                 degree2 = degree2,
+                                 k1 = k1,
+                                 k2 = k2,
+                                 operator=operator),
+                              error=function(e) NULL)
+  
+  
+  
+  
+}
+
 
 calculate_gamma <- function(n, subsets){
   soln <- 1 - log(subsets)/log(n)
