@@ -108,6 +108,12 @@ make_partition <- function(n, subsets, b, disjoint = TRUE){
   partition
 }
 
+truncate_to_n <- function(number, n) {
+  factor <- 10^n
+  truncated <- trunc(number * factor) / factor
+  return(truncated)
+}
+
 zip_plots <- function(data, zip_labels, n, use_case, image_path, subsets = NULL, gamma = NULL){
   assertthat::assert_that(!((is.null((subsets) & !is.null(gamma)) | (!is.null(subsets) & is.null(gamma)))))
   if(data.table::is.data.table(data) == FALSE){
