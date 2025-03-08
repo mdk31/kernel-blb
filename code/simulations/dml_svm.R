@@ -53,11 +53,10 @@ if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
       })
       
       boot_ci <- boot:::perc.ci((boot_reps))
-      blb_out <- data.table(lower_ci = boot_ci[4],
+      return(data.table(lower_ci = boot_ci[4],
                             upper_ci = boot_ci[5],
                             estim = mean(boot_reps),
-                            se = mean(boot_reps))
-      blb_out
+                            se = mean(boot_reps)))
     }, cl = 4)
     out <- rbindlist(out)
     out[, `:=`(n = n)]
