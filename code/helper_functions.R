@@ -43,6 +43,69 @@ aipw_kernel_weights <- function(data, degree1, degree2, k1, k2, operator, penal,
                                  operator=operator),
                               error=function(e) NULL)
   
+  #compute K
+  matrix_eva <- as.matrix( confounders )
+  # evaluation matrix
+  res.optim2_1$par <- exp(res.optim2_1$gpr$kernel_$theta)
+  res.optim2_0$par <- exp(res.optim2_0$gpr$kernel_$theta)
+  # Gram matrices
+  K1 <- res.optim2_1$gpr$kernel_(matrix_eva)
+  K0 <- res.optim2_0$gpr$kernel_(matrix_eva)
+  
+  p1 <- as.numeric(res.optim2_1$gpr$predict(matrix_eva))
+  p0 <- as.numeric(res.optim2_0$gpr$predict(matrix_eva))
+  
+  V <- rep(1/n,n)
+  
+  #Quadratic part
+  I1 <- diag( t1 )
+  I0 <- diag( t0 )
+  I1KI1 <- I1%*%K1%*%I1
+  I0KI0 <- I0%*%K0%*%I0
+  
+  KI1 <- diag(t1)%*%K1
+  KI0 <- diag(t0)%*%K0
+  
+  VKI1 <- t(V)%*%KI1
+  VKI0 <- t(V)%*%KI0
+  
+  tol <- 1e-08
+  
+  sigma1 <- res.optim2_1$par[3]^2
+  sigma0 <- res.optim2_0$par[3]^2
+  
+  Sigma <- sigma1*diag(t1) + sigma0*diag(t0)
+  #Update Q
+  Q <- (1/n^2)*( I1KI1 + I0KI0 + penal*Sigma )
+  
+  #Update c
+  c <- -2*(1/n^2)*(VKI1 + VKI0)
+  
+  rm(list = c("VKI1","VKI0"))
+  
+  model <- list()
+  model$A          <- matrix(c( t1/n ,t0/n), nrow=2, byrow=T)
+  model$rhs        <- c(1,1)
+  model$modelsense <- "min"
+  model$Q          <- Q
+  model$obj        <- c
+  model$sense      <- c("=")
+  model$lb <- rep(tol,n)
+  model$vtypes <- "C"
+  Dmat <- Q  # Symmetric positive-definite matrix for the quadratic term
+  dvec <- c  # Linear coefficients
+  Amat <- t(matrix(c(t1/n, t0/n), nrow = 2, byrow = TRUE))
+  bvec <- c(1, 1)  # Right-hand side values for the equality constraints
+  meq <- 2  # N
+  
+  params <- list(Presolve=2,OutputFlag=0,QCPDual=0)
+  
+  res <- quadprog::solve.QP(Dmat = Dmat, dvec = dvec, Amat = Amat, bvec = bvec, meq = meq)
+  
+  phi0 <- (1-data$Tr)*res$solution*(data$y - p0) + p0
+  phi1 <- (data$Tr)*res$solution*(data$y - p1) + p1
+  
+  return(list(phi1 = phi1, phi0 = phi0))
   
   
   
