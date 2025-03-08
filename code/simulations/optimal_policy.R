@@ -44,15 +44,13 @@ if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
     out <- pblapply(seq_len(replications), function(rp){
       set.seed(rp)
       dat <- aol_dgp(n = n)
-      output <- kernel_weights(dat,degree1,degree2,k1,k2,operator,penal)
-      phi1 <- output$phi1
-      phi0 <- output$phi0
+      lambda <- 0.01
+      initial_params <- c(rep(0, n), 0)  # Initial v and b
+      estim_opt_regime <- estimate_optimal_regime(data, initial_params, lambda) 
       M <- rmultinom(n = B, size = n, prob = rep(1, n))
       
       boot_reps <- sapply(seq_len(B), function(bt){
-        boot_phi1 <- M[, bt]*phi1
-        boot_phi0 <- M[, bt]*phi0
-        mean(boot_phi1) - mean(boot_phi0)
+        sum(M[, bt]*dat$y/0.5*(dat$A == estim_opt_regime))/n
       })
       
       perc_ci <- boot:::perc.ci(boot_reps)
