@@ -9,6 +9,18 @@ replications <- 1000
 K <- 10
 B <- 100 #bootstrap resamples
 
+# Kernel specific parts
+use_virtualenv("r-reticulate", required = TRUE)
+np <- import("numpy")
+source_python("/Users/macbookair/Documents/Projects/cblb/Archive/gp_simu_gate.py")
+source('code/helper_funcs.R')
+degree1 <- 1
+degree2 <- 1
+k1 <- "poly"
+k2 <- "poly"
+operator <- "single"
+penal <- log(2)
+
 base_nm <- 'aipw_kernel_balancing'
 image_path <- 'images'
 dat_path <- 'data'
