@@ -1,6 +1,7 @@
 library(pbapply)
 library(data.table)
 
+# TODO: install reticulate, add virtualenv functions and installations check
 source('code/helper_functions.R')
 
 te <- 0.8
@@ -13,7 +14,6 @@ B <- 100 #bootstrap resamples
 use_virtualenv("r-reticulate", required = TRUE)
 np <- import("numpy")
 source_python("/Users/macbookair/Documents/Projects/cblb/Archive/gp_simu_gate.py")
-source('code/helper_funcs.R')
 degree1 <- 1
 degree2 <- 1
 k1 <- "poly"
