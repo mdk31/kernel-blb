@@ -127,6 +127,21 @@ aol_dgp <- function(n){
   return(X)
 }
 
+aol_loss <- function(params, X, A, r_tilde, K_matrix, lambda) {
+  n <- length(A)
+  v <- params[1:n]  # Extract v coefficients
+  b <- params[n+1]   # Extract intercept
+  
+  f_x <- K_matrix %*% v + b
+  
+  hinge_loss <- huber_hinge(A * sign(r_tilde) * f_x)
+  
+  loss_term <- mean(abs(r_tilde) / 0.5 * hinge_loss)
+  reg_term <- (lambda / 2) * sum(v %*% K_matrix %*% v)
+  
+  return(loss_term + reg_term)
+}
+
 calculate_gamma <- function(n, subsets){
   soln <- 1 - log(subsets)/log(n)
   return(truncate_to_n(soln, 5))
@@ -236,6 +251,9 @@ crossfit_estimator <- function(data, K = 10){
   return(rbindlist(crossfit_dt))
 }
 
+huber_hinge <- function(u, delta = 1) {
+  ifelse(u >= 1, 0, ifelse(u >= -1, (1 - u)^2 / 4, -u))
+}
 
 kangschafer3 <- function(n, te, sigma, beta_overlap = 0.5){
   X1 <- rnorm(n, 0, 1)
