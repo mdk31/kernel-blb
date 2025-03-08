@@ -8,6 +8,7 @@ te <- 0.8
 sigma <- 1
 replications <- 1000
 B <- 100 #bootstrap resamples
+optimal_val <- 1.001 #extracted from PAPER
 
 
 base_nm <- 'optimal_policy'
@@ -42,7 +43,7 @@ if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
 
     out <- pblapply(seq_len(replications), function(rp){
       set.seed(rp)
-      dat <- kangschafer3(n = n, te = te, sigma = sigma, beta_overlap = 0.5)
+      dat <- aol_dgp(n = n)
       output <- kernel_weights(dat,degree1,degree2,k1,k2,operator,penal)
       phi1 <- output$phi1
       phi0 <- output$phi0
