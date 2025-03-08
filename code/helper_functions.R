@@ -108,41 +108,60 @@ make_partition <- function(n, subsets, b, disjoint = TRUE){
   partition
 }
 
-zip_plots <- function(data, n, use_case, subsets = NULL, gamma = NULL){
+zip_plots <- function(data, zip_labels, n, use_case, image_path, subsets = NULL, gamma = NULL){
   assertthat::assert_that(!((is.null((subsets) & !is.null(gamma)) | (!is.null(subsets) & is.null(gamma)))))
   if(data.table::is.data.table(data) == FALSE){
     data <- data.table::as.data.table(data)
   }
+
   nm_prefix <- paste0(use_case, '_zip_plot_n', n)
   if(is.null(subsets)){
     nm <- paste0(nm_prefix, '_full.pdf')
     title <- bquote(n == .(n))
     ggsub <- data[n == n]
-    label_sub <- zip_labels[n == n_val & subsets == subsets_val & gamma == gamma_val & B == 25]
+    label_sub <- zip_labels[n == n]
     
   } else{
     nm <- paste0(nm_prefix, '_subset_', subsets, '_gamma_', gamma, '_cblb.pdf')
-    title <- bquote(paste(s == .(subsets_val), ' and ', gamma == .(gamma_val), ' and ', n == .(n_val)))
+    title <- bquote(paste(s == .(subsets), ' and ', gamma == .(gamma), ' and ', n == .(n)))
     ggsub <- data[n == n & subsets == subsets & gamma == gamma]
-    label_sub <- zip_labels[n == n_val & subsets == subsets_val & gamma == gamma_val & B == 25]
-    
+    label_sub <- zip_labels[n == n & subsets == subsets & gamma == gamma]
   }
-  for(row_idx in seq_len(nrow(value_grid))){
-    ggsub <- ggdat[n == n_val & subsets == subsets_val & gamma == gamma_val & B == 25]
-    p <- ggplot(ggsub, aes(y = rank)) +
-      geom_segment(aes(x = lower_ci, y = rank, xend = upper_ci, yend = rank, color = covered)) +
-      facet_grid(`Propensity Model` ~ `Outcome Model`, labeller = label_both) +
-      geom_vline(aes(xintercept = te), color = 'yellow', size = 0.5, linetype = 'dashed') +
-      ylab('Fractional Centile of |z|') +
-      xlab('95% Confidence Intervals') +
-      theme_bw() +
-      scale_y_continuous(breaks = c(5, 50, 95)) +
-      scale_color_discrete(name = "Coverage") +
-      geom_text(x = 0.75, y = 50, aes(label = perc_cover), data = label_sub, size = 4) +
-      ggtitle(title)
-    
-    print(p)
-    ggsave(file.path(image_path, nm), height = 9, width = 7)
+  
+  p <- ggplot(ggsub, aes(y = rank)) +
+    geom_segment(aes(x = lower_ci, y = rank, xend = upper_ci, yend = rank, color = covered)) +
+    geom_vline(aes(xintercept = te), color = 'yellow', size = 0.5, linetype = 'dashed') +
+    ylab('Fractional Centile of |z|') +
+    xlab('95% Confidence Intervals') +
+    theme_bw() +
+    scale_y_continuous(breaks = c(5, 50, 95)) +
+    scale_color_discrete(name = "Coverage") +
+    geom_text(x = 0.75, y = 50, aes(label = perc_cover), data = label_sub, size = 4) +
+    ggtitle(title)
+  
+  if(is.null(subsets)){
+    p <- p + facet_grid(n ~ ., labeller = label_both)
+  } else{
+    p <- p + facet_grid(n ~ subsets, labeller = label_both)
   }
+  
+  ggsave(file.path(image_path, nm), plot = p, height = 9, width = 7)
+}
+
+zip_plots_helper <- function(data, type){
+  data[, `:=`(cent = abs(estim - te)/se)]
+  if(type == 'full'){
+    group_cols <- c('n')
+  } else{
+    group_cols <- c('n', 'gamma', 'subsets')
+  }
+  data[, `:=`(rank = as.integer(cut(cent, quantile(cent, probs = seq(0, 1, by = 0.01)), include.lowest = TRUE))), 
+      by = group_cols]
+  
+  data[, `:=`(n = format(n, scientific = FALSE, big.mark = ','),
+             covered = fifelse(lower_ci <= te & upper_ci >= te, 'Coverer', 'Non-coverer'))]
+  zip_labels <- data[, .(perc_cover = round(mean(covered == 'Coverer'), 3)), by = group_cols]
+  
+  return(list(zip = data, zip_labels = zip_labels))
 }
 
