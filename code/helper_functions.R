@@ -251,6 +251,33 @@ crossfit_estimator <- function(data, K = 10){
   return(rbindlist(crossfit_dt))
 }
 
+estimate_optimal_regime <- function(data, initial_params, lambda){
+  
+  num_params <- nrow(data)
+  X <- data[, c('x1', 'x2', 'x3', 'x4', 'x5')]
+  A <- data$A
+  K_matrix <- kernelMatrix(vanilladot(), as.matrix(X))
+  r_tilde <- train_aol(dat)
+  
+  opt_result <- optim(
+    par = initial_params,
+    fn = aol_loss,
+    X = X,
+    A = A,
+    r_tilde = r_tilde,
+    K_matrix = K_matrix,
+    lambda = lambda,
+    method = "L-BFGS-B"
+  )
+  
+  # Extract optimized parameters
+  v_opt <- opt_result$par[1:num_params]
+  b_opt <- opt_result$par[num_params + 1]
+  decision_boundary <- K_matrix %*% v_opt + b_opt
+  estim_opt_regime <- ifelse(decision_boundary > 0, 1, -1)
+  return(estim_opt_regime)
+}
+
 huber_hinge <- function(u, delta = 1) {
   ifelse(u >= 1, 0, ifelse(u >= -1, (1 - u)^2 / 4, -u))
 }
