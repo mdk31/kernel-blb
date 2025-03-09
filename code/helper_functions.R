@@ -192,7 +192,7 @@ causal_blb_aipw <- function(data, b, subsets,  degree1, degree2, k1, k2, operato
   
   blb_out <- lapply(partitions, function(i){
     tmp_dat <- data[i]
-    output <- kernel_weights(tmp_dat, degree1, degree2, k1, k2, operator, penal)
+    output <- aipw_kernel_weights(tmp_dat, degree1, degree2, k1, k2, operator, penal)
     phi1 <- output$phi1
     phi0 <- output$phi0
     
