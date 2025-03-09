@@ -1,19 +1,18 @@
 library(pbapply)
+library(reticulate)
 library(data.table)
 
-# TODO: install reticulate, add virtualenv functions and installations check
 source('code/helper_functions.R')
 
 te <- 0.8
 sigma <- 1
 replications <- 1000
-K <- 10
 B <- 100 #bootstrap resamples
 
 # Kernel specific parts
 use_virtualenv("r-reticulate", required = TRUE)
 np <- import("numpy")
-source_python("/Users/macbookair/Documents/Projects/cblb/Archive/gp_simu_gate.py")
+source_python("code/gp_simu_gate.py")
 degree1 <- 1
 degree2 <- 1
 k1 <- "poly"
@@ -54,11 +53,10 @@ if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
     out <- pblapply(seq_len(replications), function(rp){
       set.seed(rp)
       dat <- kangschafer3(n = n, te = te, sigma = sigma, beta_overlap = 0.5)
-      output <- kernel_weights(dat,degree1,degree2,k1,k2,operator,penal)
+      output <- aipw_kernel_weights(dat,degree1,degree2,k1,k2,operator,penal)
       phi1 <- output$phi1
       phi0 <- output$phi0
       M <- rmultinom(n = B, size = n, prob = rep(1, n))
-      
       boot_reps <- sapply(seq_len(B), function(bt){
         boot_phi1 <- M[, bt]*phi1
         boot_phi0 <- M[, bt]*phi0
@@ -70,7 +68,7 @@ if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
                         upper_ci = perc_ci[5],
                         estim = mean(boot_reps),
                         se = sd(boot_reps)))
-    }, cl = 4)
+    }, cl = 1)
     out <- rbindlist(out)
     out[, `:=`(n = n)]
     out
@@ -100,7 +98,7 @@ if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
       set.seed(rp)
       dat <- kangschafer3(n = n, te = te, sigma = sigma, beta_overlap = 0.5)
       return(causal_blb_aipw(data = dat, b = b, subsets = subsets, degree1, degree2, k1, k2, operator, penal))
-    }, cl = 4)
+    }, cl = 1)
     
     out <- rbindlist(out)
     out[, `:=`(n = n)]
