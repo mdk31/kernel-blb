@@ -322,7 +322,8 @@ truncate_to_n <- function(number, n) {
   return(truncated)
 }
 
-zip_plots <- function(data, zip_labels, n, use_case, image_path, subsets = NULL, gamma = NULL){
+zip_plots <- function(data, zip_labels, n, use_case, image_path, subsets = NULL, gamma = NULL,
+                      text_x = 0.75, text_y = 50){
   assertthat::assert_that(!((is.null((subsets) & !is.null(gamma)) | (!is.null(subsets) & is.null(gamma)))))
   if(data.table::is.data.table(data) == FALSE){
     data <- data.table::as.data.table(data)
@@ -350,7 +351,7 @@ zip_plots <- function(data, zip_labels, n, use_case, image_path, subsets = NULL,
     ggplot2::theme_bw() +
     ggplot2::scale_y_continuous(breaks = c(5, 50, 95)) +
     ggplot2::scale_color_discrete(name = "Coverage") +
-    ggplot2::geom_text(x = 0.75, y = 50, ggplot2::aes(label = perc_cover), data = label_sub, size = 4) +
+    ggplot2::geom_text(x = text_x, y = text_y, ggplot2::aes(label = perc_cover), data = label_sub, size = 4) +
     ggplot2::ggtitle(title)
   
   if(is.null(subsets)){
