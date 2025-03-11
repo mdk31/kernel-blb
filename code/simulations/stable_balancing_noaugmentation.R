@@ -29,7 +29,7 @@ n_values <- c(10000)
 subset_values <- c(5, 10, 15)
 
 # FULL SIMULATIONS----
-grid_vals <- as.data.table(expand.grid(n = n_values))
+grid_vals <- as.data.table(expand.grid(n = n_values, kernel_approx = c(TRUE, FALSE)))
 seq_row <- seq_len(nrow(grid_vals))
 
 if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
@@ -38,6 +38,7 @@ if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
   cblb <- lapply(seq_row, function(i){
     grid_val <- grid_vals[i]
     n <- grid_val$n
+    kernel_approx <- grid_val$kernel_approx
 
     out <- pblapply(seq_len(replications), function(rp){
       set.seed(rp)
@@ -46,7 +47,7 @@ if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
                                        A = dat$Tr,
                                        Y = dat$y,
                                        delta.v=1e-4,
-                                       kernel.approximation = TRUE,
+                                       kernel.approximation = kernel_approx,
                                        c = 100)
       
       weights0 <- output[[1]]$res0$x
@@ -56,11 +57,9 @@ if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
       dat$full_weights[dat$Tr == 0] <- weights0
       dat$full_weights <- dat$full_weights*n
       # dat$full_weights <- output[[1]]$res$x*n
-      m0 <- output[[1]]$m0
-      m1 <- output[[1]]$m1
       
-      phi1 <- (dat$Tr)*dat$full_weights*(dat$y - m1) + m1
-      phi0 <- (1-dat$Tr)*dat$full_weights*(dat$y - m0) + m0
+      phi1 <- (dat$Tr)*dat$full_weights*(dat$y)
+      phi0 <- (1-dat$Tr)*dat$full_weights*(dat$y)
       M <- rmultinom(n = B, size = n, prob = rep(1, n))
       
       blb_reps <- sapply(seq_len(B), function(bt){
@@ -77,7 +76,7 @@ if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
                         se = c(sd(blb_reps))))
     }, cl = 4)
     out <- rbindlist(out)
-    out[, `:=`(n = n)]
+    out[, `:=`(n = n, kernel_approx = kernel_approx)]
     out
   })
   full <- rbindlist(cblb)
@@ -106,7 +105,7 @@ if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
     out <- pblapply(seq_len(replications), function(rp){
       set.seed(rp)
       dat <- kangschafer3(n = n, te = te, sigma = sigma, beta_overlap = 0.5)
-      return(causal_blb_stable(data = dat, b = b, subsets = subsets, kernel_approx = kernel_approx))
+      return(causal_blb_stable_noaugment(data = dat, b = b, subsets = subsets, kernel_approx = kernel_approx))
     }, cl = 4)
     
     out <- rbindlist(out)
@@ -117,5 +116,5 @@ if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
   saveRDS(cblb, file.path(temp_dir, 'cblb_bootstrap.rds'))
 }
 
-full[, .(mean(lower_ci <= te & upper_ci >= te)), by = 'n']
+full[, .(mean(lower_ci <= te & upper_ci >= te)), by = c('n', 'kernel_approx')]
 cblb[, .(mean(lower_ci <= te & upper_ci >= te)), by = c('n', 'subsets', 'gamma', 'kernel_approx')]
