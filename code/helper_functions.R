@@ -240,7 +240,7 @@ causal_blb_stable <- function(data, b, subsets, kernel_approx = TRUE, disjoint =
     tmp_dat$full_weights <- NA
     tmp_dat$full_weights[tmp_dat$Tr == 1] <- weights1
     tmp_dat$full_weights[tmp_dat$Tr == 0] <- weights0
-    tmp_dat$full_weights <- tmp_dat$full_weights*n
+    tmp_dat$full_weights <- tmp_dat$full_weights*b
     m0 <- output[[1]]$m0
     m1 <- output[[1]]$m1
     
