@@ -228,7 +228,7 @@ causal_blb_stable <- function(data, b, subsets, kernel_approx = TRUE, disjoint =
   
   blb_out <- lapply(partitions, function(i){
     tmp_dat <- data[i]
-    output <- osqp_kernel_sbwATE(X = as.matrix(tmp_dat[, c('X1', 'X2')]),
+    output <- osqp_kernel_sbw_twofit(X = as.matrix(tmp_dat[, c('X1', 'X2')]),
                                                    A = tmp_dat$Tr,
                                                    Y = tmp_dat$y,
                                                    delta.v=1e-4,
@@ -237,8 +237,8 @@ causal_blb_stable <- function(data, b, subsets, kernel_approx = TRUE, disjoint =
     
     tmp_dat$full_weights <- output[[1]]$res$x*b
     
-    phi1 <- (tmp_dat$Tr)*tmp_dat$full_weights*(tmp_dat$y - m1) + m1
-    phi0 <- (1-tmp_dat$Tr)*tmp_dat$full_weights*(tmp_dat$y - m0) + m0
+    phi1 <- (tmp_dat$Tr)*tmp_dat$full_weights*(tmp_dat$y - output[[1]]$m1) + output[[1]]$m1
+    phi0 <- (1-tmp_dat$Tr)*tmp_dat$full_weights*(tmp_dat$y - output[[1]]$m0) + output[[1]]$m0
     M <- rmultinom(n = B, size = n, prob = rep(1, b))
     
     blb_reps <- sapply(seq_len(B), function(bt){
