@@ -116,3 +116,6 @@ if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
   cblb <- rbindlist(cblb)
   saveRDS(cblb, file.path(temp_dir, 'cblb_bootstrap.rds'))
 }
+
+full[, .(mean(lower_ci <= te & upper_ci >= te)), by = 'n']
+cblb[, .(mean(lower_ci <= te & upper_ci >= te)), by = c('n', 'subsets', 'gamma', 'kernel_approx')]
