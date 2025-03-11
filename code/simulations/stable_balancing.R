@@ -33,7 +33,7 @@ grid_vals <- as.data.table(expand.grid(n = n_values))
 seq_row <- seq_len(nrow(grid_vals))
 
 if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
-  cblb <- readRDS(file.path(temp_dir, 'full_bootstrap.rds'))
+  full <- readRDS(file.path(temp_dir, 'full_bootstrap.rds'))
 } else{
   cblb <- lapply(seq_row, function(i){
     grid_val <- grid_vals[i]
@@ -80,15 +80,15 @@ if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
     out[, `:=`(n = n)]
     out
   })
-  cblb <- rbindlist(cblb)
-  saveRDS(cblb, file.path(temp_dir, 'full_bootstrap.rds'))
+  full <- rbindlist(cblb)
+  saveRDS(full, file.path(temp_dir, 'full_bootstrap.rds'))
 }
 
 
 # cBLB SIMULATIONS----
 grid_vals <- as.data.table(expand.grid(n = n_values,
                          subsets = subset_values,
-                         kernel_approx = c(TRUE, FALSE)))
+                         kernel_approx = c(TRUE)))
 grid_vals[, `:=`(gamma = calculate_gamma(n, subsets))]
 seq_row <- seq_len(nrow(grid_vals))
 
