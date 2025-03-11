@@ -383,6 +383,7 @@ make_partition <- function(n, subsets, b, disjoint = TRUE){
   partition
 }
 
+# From JOSE paper
 osqp_kernel_sbw_twofit <- function(X,A,Y,
                                    delta.v=0.005, 
                                    X_=NULL,
