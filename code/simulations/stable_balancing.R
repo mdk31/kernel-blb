@@ -91,7 +91,7 @@ if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
     }, cl = 4)
     
     out <- rbindlist(out)
-    out[, `:=`(n = n)]
+    out[, `:=`(n = n, subsets = subsets, gamma = gamma, kernel_approx = kernel_approx)]
     out
   })
   cblb <- rbindlist(cblb)
