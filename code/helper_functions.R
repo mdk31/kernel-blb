@@ -405,7 +405,7 @@ kernel.basis <- function(X,A,Y,
     gram.mat <- makeK_noparallel(X)
     res = RSpectra::eigs_sym(gram.mat, c, which = "LM")
     # CLIP NEGATIVE
-    # res$values[res$values < 1e-10] <- 1e-10
+    res$values[res$values < 1e-10] <- 1e-10
     X_ <- if(is.null(U.mat)) {
       res$vectors %*% diag(1/sqrt(res$values))
     } else{
