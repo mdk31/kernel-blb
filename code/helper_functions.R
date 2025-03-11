@@ -218,7 +218,8 @@ causal_blb_aipw <- function(data, b, subsets,  degree1, degree2, k1, k2, operato
   return(blb_out)
 }
 
-causal_blb_stable <- function(data, b, subsets, kernel_approx = TRUE, disjoint = TRUE){
+causal_blb_stable <- function(data, b, subsets, kernel_approx = TRUE, disjoint = TRUE, augment = FALSE,
+                              delta.v = 1e-4){
   if(data.table::is.data.table(data) == FALSE){
     data <- data.table::as.data.table(data)
   }
@@ -231,7 +232,7 @@ causal_blb_stable <- function(data, b, subsets, kernel_approx = TRUE, disjoint =
     output <- osqp_kernel_sbw_twofit(X = as.matrix(tmp_dat[, c('X1', 'X2')]),
                                                    A = tmp_dat$Tr,
                                                    Y = tmp_dat$y,
-                                                   delta.v=1e-4,
+                                                   delta.v=delta.v,
                                                    kernel.approximation = kernel_approx,
                                                    c = 100)
     
@@ -241,11 +242,17 @@ causal_blb_stable <- function(data, b, subsets, kernel_approx = TRUE, disjoint =
     tmp_dat$full_weights[tmp_dat$Tr == 1] <- weights1
     tmp_dat$full_weights[tmp_dat$Tr == 0] <- weights0
     tmp_dat$full_weights <- tmp_dat$full_weights*b
-    m0 <- output[[1]]$m0
-    m1 <- output[[1]]$m1
-    
-    phi1 <- (tmp_dat$Tr)*tmp_dat$full_weights*(tmp_dat$y - m1) + m1
-    phi0 <- (1-tmp_dat$Tr)*tmp_dat$full_weights*(tmp_dat$y - m0) + m0
+    if(augment){
+      m0 <- output[[1]]$m0
+      m1 <- output[[1]]$m1
+      
+      phi1 <- (tmp_dat$Tr)*tmp_dat$full_weights*(tmp_dat$y - m1) + m1
+      phi0 <- (1-tmp_dat$Tr)*tmp_dat$full_weights*(tmp_dat$y - m0) + m0
+    } else{
+      phi1 <- (tmp_dat$Tr)*tmp_dat$full_weights*(tmp_dat$y)
+      phi0 <- (1-tmp_dat$Tr)*tmp_dat$full_weights*(tmp_dat$y)
+    }
+
     M <- rmultinom(n = B, size = n, prob = rep(1, b))
     
     blb_reps <- sapply(seq_len(B), function(bt){
