@@ -262,7 +262,6 @@ causal_blb_stable <- function(data, b, subsets, kernel_approx = TRUE, disjoint =
   return(blb_out)
 }
 
-
 crossfit_estimator <- function(data, K = 10){
   if(data.table::is.data.table(data) == FALSE){
     data <- data.table::as.data.table(data)
@@ -365,7 +364,6 @@ makeK_noparallel <- function(allx, useasbases=NULL, b=NULL, linkernel = FALSE, s
   return(K)
 }
 
-
 make_partition <- function(n, subsets, b, disjoint = TRUE){
   part_idx <- seq(1, n, by = 1)
   if(disjoint){
@@ -384,6 +382,75 @@ make_partition <- function(n, subsets, b, disjoint = TRUE){
   }
   partition
 }
+
+osqp_kernel_sbwATE <- function(X,A,Y,
+                               delta.v=0.005, 
+                               X_=NULL,
+                               osqp.setting=NULL,
+                               basis="kernel", kernel.approximation=TRUE,
+                               c = NULL, l=NULL, gamma=NULL, U.mat = NULL,
+                               dim.reduction=FALSE, s=NULL,
+                               K=2, interactions=FALSE) {
+  
+  res.list <- list()
+  if (is.null(X_)) {
+    if (basis=="kernel"){
+      X_ <- kernel.basis(X,A,Y, 
+                         kernel.approximation=kernel.approximation, 
+                         c=c, l=l, gamma=gamma, U.mat=U.mat,
+                         s=s, dim.reduction=dim.reduction)
+    } 
+    
+    else if (basis=="power") {
+      X_ <- power.basis(X,A,Y, 
+                        K=K, interactions=interactions)
+    } 
+    
+    else {
+      stop("not available yet")
+    }
+  }
+  
+  nX <- ncol(X_)
+  n1 <- sum(A); n0 <- sum(1-A)
+  n <- n1 + n0
+  Xt <- X_[A==1,]; Xc <- X_[A==0,]
+  Yt <- Y[A==1]; Yc <- Y[A==0]
+  
+  X_combined <- X_
+  X_combined[A == 1, ] <- Xt
+  X_combined[A == 0, ] <- -Xc
+  
+  P.mat <- as(Matrix::.symDiagonal(n=n, x=1.), "dgCMatrix")
+  q.vec <- rep(-1/n, n)
+  
+  A.mat <- Matrix::Matrix(rbind(rep(1.,n),
+                                P.mat,
+                                t(X_combined)), sparse = TRUE)
+  
+  if (is.null(osqp.setting)) {
+    # use default one
+    settings <- osqp::osqpSettings(alpha = 1.5, verbose = FALSE)  
+  } else {
+    settings <- osqp.setting
+  }
+  
+  for (j in 1:length(delta.v)) {
+    l.vec <- c(1, rep(0.,n),
+               rep(0, nX) - delta.v[j] * rep(1,nX))
+    u.vec <- c(1, rep(1.,n),
+               rep(0, nX) + delta.v[j] * rep(1,nX))
+    if (j==1) {
+      model <- osqp::osqp(P.mat, q.vec, A.mat, l.vec, u.vec, settings)
+    } else {
+      model$Update(l = l.vec, u = u.vec)
+    }
+    res <- model$Solve()
+    print(res$info$status)
+    res.list[[j]] <- list(res = res)
+  }
+  return(res.list)
+}  
 
 truncate_to_n <- function(number, n) {
   factor <- 10^n
