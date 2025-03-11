@@ -1,8 +1,7 @@
 library(pbapply)
 library(data.table)
 
-source('code/helper_funcs.R')
-source('code/osqp-kernel-sbw.R')
+source('code/helper_functions.R')
 Rcpp::sourceCpp("code/RBF_kernel_C_parallel.cpp")
 
 te <- 0.8
@@ -69,7 +68,8 @@ subset_values <- c(5, 10, 15)
 
 # cBLB SIMULATIONS----
 grid_vals <- as.data.table(expand.grid(n = n_values,
-                         subsets = subset_values))
+                         subsets = subset_values,
+                         kernel_approx = c(TRUE, FALSE)))
 grid_vals[, `:=`(gamma = calculate_gamma(n, subsets))]
 seq_row <- seq_len(nrow(grid_vals))
 
@@ -82,11 +82,12 @@ if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
     subsets <- grid_val$subsets
     gamma <- grid_val$gamma
     b <- floor(n^gamma)
+    kernel_approx <- grid_val$kernel_approx
     
     out <- pblapply(seq_len(replications), function(rp){
       set.seed(rp)
       dat <- kangschafer3(n = n, te = te, sigma = sigma, beta_overlap = 0.5)
-      return(causal_blb_aipw(data = dat, b = b, subsets = subsets, degree1, degree2, k1, k2, operator, penal))
+      return(causal_blb_stable(data = dat, b = b, subsets = subsets, kernel_approx = kernel_approx))
     }, cl = 4)
     
     out <- rbindlist(out)
