@@ -432,7 +432,7 @@ makeK_noparallel <- function(allx, useasbases=NULL, b=NULL, linkernel = FALSE, s
     K <- allx  # Linear kernel case
   } else {
     if (sum(useasbases) == N) {
-      K <- kernlab::kernelMatrix(kernlab::rbf(), allx)
+      K <- kernlab::kernelMatrix(kernlab::rbfdot(), allx)
     } 
   }
   return(K)
