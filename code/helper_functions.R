@@ -550,14 +550,14 @@ osqp_kernel_sbw_twofit <- function(X,A,Y,
   
   for (j in 1:length(delta.v)) {
     l.vec0 <- c(1., rep(0.,n0),
-                colMeans(Xt) - delta.v[j] * rep(1,nX))
+                colMeans(X_) - delta.v[j] * rep(1,nX))
     u.vec0 <- c(1., rep(1.,n0),
-                colMeans(Xt) + delta.v[j] * rep(1,nX))
+                colMeans(X_) + delta.v[j] * rep(1,nX))
     
     l.vec1 <- c(1., rep(0.,n1),
-                colMeans(Xc) - delta.v[j] * rep(1,nX))
+                colMeans(X_) - delta.v[j] * rep(1,nX))
     u.vec1 <- c(1., rep(1.,n1),
-                colMeans(Xc) + delta.v[j] * rep(1,nX))
+                colMeans(X_) + delta.v[j] * rep(1,nX))
     if (j==1) {
       model0 <- osqp::osqp(P.mat0, q.vec0, A.mat0, l.vec0, u.vec0, settings)
       model1 <- osqp::osqp(P.mat1, q.vec1, A.mat1, l.vec1, u.vec1, settings)
