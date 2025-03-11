@@ -297,6 +297,30 @@ kangschafer3 <- function(n, te, sigma, beta_overlap = 0.5){
   return(out)
 }
 
+makeK_noparallel <- function(allx, useasbases=NULL, b=NULL, linkernel = FALSE, scale = TRUE){
+  N=nrow(allx)
+  # If no "useasbasis" given, assume all observations are to be used.
+  if(is.null(useasbases)) {useasbases = rep(1, N)}
+  
+  #default b is set to 2ncol to match kbal for now
+  if (is.null(b)){ b=2*ncol(allx) }
+  
+  if(scale) {
+    allx = scale(allx)
+  } 
+  bases = allx[useasbases==1, ]
+  
+  if (linkernel == TRUE) {
+    K <- allx  # Linear kernel case
+  } else {
+    if (sum(useasbases) == N) {
+      K <- kernlab::kernelMatrix(kernlab::rbfdot(), allx)
+    } 
+  }
+  return(K)
+}
+
+
 make_partition <- function(n, subsets, b, disjoint = TRUE){
   part_idx <- seq(1, n, by = 1)
   if(disjoint){
