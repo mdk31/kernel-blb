@@ -218,6 +218,43 @@ causal_blb_aipw <- function(data, b, subsets,  degree1, degree2, k1, k2, operato
   return(blb_out)
 }
 
+causal_blb_stable <- function(data, b, subsets,  degree1, degree2, k1, k2, operator, penal, disjoint = TRUE){
+  if(data.table::is.data.table(data) == FALSE){
+    data <- data.table::as.data.table(data)
+  }
+  n <- nrow(data)
+  partitions <- make_partition(n = n, subsets = subsets, b = b, disjoint = disjoint)
+  idx <- seq_len(b)
+  
+  blb_out <- lapply(partitions, function(i){
+    tmp_dat <- data[i]
+    output <- aipw_kernel_weights(tmp_dat, degree1, degree2, k1, k2, operator, penal)
+    phi1 <- output$phi1
+    phi0 <- output$phi0
+    
+    M <- rmultinom(n = B, size = n, prob = rep(1, b))
+    blb_reps <- sapply(seq_len(B), function(bt){
+      boot_phi1 <- M[, bt]*phi1
+      boot_phi0 <- M[, bt]*phi0
+      sum(boot_phi1)/n - sum(boot_phi0)/n
+    })
+    
+    perc_ci <- boot:::perc.ci(blb_reps)
+    return(data.table(lower_ci = perc_ci[4],
+                      upper_ci = perc_ci[5],
+                      estim = mean(blb_reps),
+                      se = sd(blb_reps)))
+  })
+  
+  blb_out <- rbindlist(blb_out)
+  blb_out <- blb_out[, .(lower_ci = mean(lower_ci),
+                         upper_ci = mean(upper_ci),
+                         estim = mean(estim),
+                         se = mean(se))]
+  return(blb_out)
+}
+
+
 crossfit_estimator <- function(data, K = 10){
   if(data.table::is.data.table(data) == FALSE){
     data <- data.table::as.data.table(data)
