@@ -235,10 +235,17 @@ causal_blb_stable <- function(data, b, subsets, kernel_approx = TRUE, disjoint =
                                                    kernel.approximation = kernel_approx,
                                                    c = 100)
     
-    tmp_dat$full_weights <- output[[1]]$res$x*b
+    weights0 <- output[[1]]$res0$x
+    weights1 <- output[[1]]$res1$x
+    tmp_dat$full_weights <- NA
+    tmp_dat$full_weights[tmp_dat$Tr == 1] <- weights1
+    tmp_dat$full_weights[tmp_dat$Tr == 0] <- weights0
+    tmp_dat$full_weights <- tmp_dat$full_weights*n
+    m0 <- output[[1]]$m0
+    m1 <- output[[1]]$m1
     
-    phi1 <- (tmp_dat$Tr)*tmp_dat$full_weights*(tmp_dat$y - output[[1]]$m1) + output[[1]]$m1
-    phi0 <- (1-tmp_dat$Tr)*tmp_dat$full_weights*(tmp_dat$y - output[[1]]$m0) + output[[1]]$m0
+    phi1 <- (tmp_dat$Tr)*tmp_dat$full_weights*(tmp_dat$y - m1) + m1
+    phi0 <- (1-tmp_dat$Tr)*tmp_dat$full_weights*(tmp_dat$y - m0) + m0
     M <- rmultinom(n = B, size = n, prob = rep(1, b))
     
     blb_reps <- sapply(seq_len(B), function(bt){
