@@ -29,41 +29,60 @@ n_values <- c(10000)
 subset_values <- c(5, 10, 15)
 
 # FULL SIMULATIONS----
-# grid_vals <- as.data.table(expand.grid(n = n_values))
-# seq_row <- seq_len(nrow(grid_vals))
-# 
-# if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
-#   cblb <- readRDS(file.path(temp_dir, 'full_bootstrap.rds'))
-# } else{
-#   cblb <- lapply(seq_row, function(i){
-#     grid_val <- grid_vals[i]
-#     n <- grid_val$n
-# 
-#     out <- pblapply(seq_len(replications), function(rp){
-#       set.seed(rp)
-#       dat <- aol_dgp(n = n)
-#       lambda <- 0.01
-#       initial_params <- c(rep(0, n), 0)  # Initial v and b
-#       estim_opt_regime <- estimate_optimal_regime(data, initial_params, lambda) 
-#       M <- rmultinom(n = B, size = n, prob = rep(1, n))
-#       
-#       boot_reps <- sapply(seq_len(B), function(bt){
-#         sum(M[, bt]*dat$y/0.5*(dat$A == estim_opt_regime))/n
-#       })
-#       
-#       perc_ci <- boot:::perc.ci(boot_reps)
-#       return(data.table(lower_ci = perc_ci[4],
-#                         upper_ci = perc_ci[5],
-#                         estim = mean(boot_reps),
-#                         se = sd(boot_reps)))
-#     }, cl = 4)
-#     out <- rbindlist(out)
-#     out[, `:=`(n = n)]
-#     out
-#   })
-#   cblb <- rbindlist(cblb)
-#   saveRDS(cblb, file.path(temp_dir, 'full_bootstrap.rds'))
-# }
+grid_vals <- as.data.table(expand.grid(n = n_values))
+seq_row <- seq_len(nrow(grid_vals))
+
+if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
+  cblb <- readRDS(file.path(temp_dir, 'full_bootstrap.rds'))
+} else{
+  cblb <- lapply(seq_row, function(i){
+    grid_val <- grid_vals[i]
+    n <- grid_val$n
+
+    out <- pblapply(seq_len(replications), function(rp){
+      set.seed(rp)
+      dat <- kangschafer3(n = n, te = te, sigma = sigma, beta_overlap = 0.5)
+      output <- osqp_kernel_sbw_twofit(X = as.matrix(dat[, c('X1', 'X2')]),
+                                       A = dat$Tr,
+                                       Y = dat$y,
+                                       delta.v=1e-4,
+                                       kernel.approximation = TRUE,
+                                       c = 100)
+      
+      weights0 <- output[[1]]$res0$x
+      weights1 <- output[[1]]$res1$x
+      dat$full_weights <- NA
+      dat$full_weights[dat$Tr == 1] <- weights1
+      dat$full_weights[dat$Tr == 0] <- weights0
+      dat$full_weights <- dat$full_weights*n
+      # dat$full_weights <- output[[1]]$res$x*n
+      m0 <- output[[1]]$m0
+      m1 <- output[[1]]$m1
+      
+      phi1 <- (dat$Tr)*dat$full_weights*(dat$y - m1) + m1
+      phi0 <- (1-dat$Tr)*dat$full_weights*(dat$y - m0) + m0
+      M <- rmultinom(n = B, size = n, prob = rep(1, n))
+      
+      blb_reps <- sapply(seq_len(B), function(bt){
+        boot_phi1 <- M[, bt]*phi1
+        boot_phi0 <- M[, bt]*phi0
+        mean(boot_phi1) - mean(boot_phi0)
+        
+      })
+      
+      perc_ci <- boot:::perc.ci(blb_reps)
+      return(data.table(lower_ci = c(perc_ci[4]),
+                        upper_ci = c(perc_ci[5]),
+                        estim = c(mean(blb_reps)),
+                        se = c(sd(blb_reps))))
+    }, cl = 4)
+    out <- rbindlist(out)
+    out[, `:=`(n = n)]
+    out
+  })
+  cblb <- rbindlist(cblb)
+  saveRDS(cblb, file.path(temp_dir, 'full_bootstrap.rds'))
+}
 
 
 # cBLB SIMULATIONS----
