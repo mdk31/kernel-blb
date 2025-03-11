@@ -92,7 +92,7 @@ if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
     n <- grid_val$n
     subsets <- grid_val$subsets
     gamma <- grid_val$gamma
-    b <- round(n^gamma)
+    b <- floor(n^gamma)
     
     out <- pblapply(seq_len(replications), function(rp){
       set.seed(rp)
