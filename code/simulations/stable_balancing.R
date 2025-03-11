@@ -88,7 +88,7 @@ if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
 # cBLB SIMULATIONS----
 grid_vals <- as.data.table(expand.grid(n = n_values,
                          subsets = subset_values,
-                         kernel_approx = c(TRUE)))
+                         kernel_approx = c(TRUE, FALSE)))
 grid_vals[, `:=`(gamma = calculate_gamma(n, subsets))]
 seq_row <- seq_len(nrow(grid_vals))
 
