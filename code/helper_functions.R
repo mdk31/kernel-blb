@@ -341,6 +341,66 @@ kangschafer3 <- function(n, te, sigma, beta_overlap = 0.5){
   return(out)
 }
 
+
+kernel.basis <- function(X,A,Y, 
+                         kernel.approximation=TRUE,
+                         dim.reduction=FALSE,
+                         c = NULL, l=NULL, s=NULL, gamma=NULL, U.mat = NULL) {
+  n <- nrow(X)
+  if (kernel.approximation) {
+    if (is.null(c)) {
+      # use some heuristics for choice of c 
+      c = ifelse(n<1e+5, 100, 250) 
+    }
+    if (is.null(l)) {
+      # set arbitrarily similar to Wang, 2019  
+      l=round(c/2)
+      s=round(l/2)
+    }
+    if (is.null(gamma)) {
+      # heuristics by Hazlett, 2020  
+      gamma = 1/(2*ncol(X)) 
+    }
+    
+    set_c = sample(x = 1:n, size = c, replace = FALSE)
+    set_c = sort(set_c)
+    X <- scale(X)
+    # --------------------------------------------------------
+    # # slow version:  
+    # f <- function(x,y) sum(x*y)
+    # C <- outer(
+    #   1:n, set_c,
+    #   Vectorize( function(i,j) f(X[i,], X[j,]) )
+    # )
+    # --------------------------------------------------------
+    # C <- RBF_kernel_C(X, c, set_c)
+    C <- RBF_kernel_C_parallel(X, c, set_c)
+    # --------------------------------------------------------
+    W <- C[set_c,]
+    SVD_W <- RSpectra::svds(A=W, k=l)
+    if (dim.reduction) {
+      R <- C %*% SVD_W$u %*% diag(1/sqrt(SVD_W$d))
+      SVD_R <- svds(A=R, k=s) 
+      X_ <- R %*% SVD_R$v # B
+    } else {
+      X_ <- C %*% SVD_W$u # %*% diag(1/SVD_W$d)
+      # lambda_ <- 1/SVD_W$d
+    }
+  } else{
+    # O(n^2) spoce-, O(n^3) time-complexity
+    gram.mat <- makeK_noparallel(X)
+    res = RSpectra::eigs_sym(gram.mat, c, which = "LM")
+    # CLIP NEGATIVE
+    # res$values[res$values < 1e-10] <- 1e-10
+    X_ <- if(is.null(U.mat)) {
+      res$vectors %*% diag(1/sqrt(res$values))
+    } else{
+      U.mat %*% diag(1/sqrt(res$values))
+    }
+  }
+  return(X_)
+}
+
 makeK_noparallel <- function(allx, useasbases=NULL, b=NULL, linkernel = FALSE, scale = TRUE){
   N=nrow(allx)
   # If no "useasbasis" given, assume all observations are to be used.
