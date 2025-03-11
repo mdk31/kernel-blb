@@ -383,14 +383,38 @@ make_partition <- function(n, subsets, b, disjoint = TRUE){
   partition
 }
 
-osqp_kernel_sbwATE <- function(X,A,Y,
-                               delta.v=0.005, 
-                               X_=NULL,
-                               osqp.setting=NULL,
-                               basis="kernel", kernel.approximation=TRUE,
-                               c = NULL, l=NULL, gamma=NULL, U.mat = NULL,
-                               dim.reduction=FALSE, s=NULL,
-                               K=2, interactions=FALSE) {
+osqp_kernel_sbw_twofit <- function(X,A,Y,
+                                   delta.v=0.005, 
+                                   X_=NULL,
+                                   osqp.setting=NULL,
+                                   basis="kernel", kernel.approximation=TRUE,
+                                   c = NULL, l=NULL, gamma=NULL, U.mat = NULL,
+                                   dim.reduction=FALSE, s=NULL,
+                                   K=2, interactions=FALSE) {
+  
+  #------------------------------------------------------------------------------------------
+  # @X: covariates (n x d matrix)
+  # @A: treatment (n x 1 vector)
+  # @Y: outcome (n x 1 vector)
+  # @X_: the basis matrix where (approximate) mean balancing between the treated and control groups is to be achieved
+  #      (ncol(X_) = n)
+  # @osqp.setting: osqp settings
+  # @delta.v: tolerance level (either a single number or a numeric vector);
+  #           the numeric vector is used for multiple iterations, each with different tolerance level
+  # @basis: support kernel- or power series- (moment-) based constructions
+  # + kernel basis (basis=='kernel')
+  #     @kernel.approximation: if TRUE, use the Nystrom kernel approximation method proposed in \insertRef{wang2019scalable}
+  #                            if FALSE, use the full gram matrix to compute eigenvectors as in \insertRef{hazlett2018}
+  #     @c: sketch size for the standard Nystrom approximation. 
+  #     @l: regularization parameter l < c. 
+  #     @s: target rank for s < l the rank-restricted Nyström approximation
+  #     @gamma: RBK parameter; set default value as 1/(2*dim(X))
+  #     @U.mat: externel input for nxc eigenvector matrix; only used when kernel.approximation==FALSE
+  # + power series basis (basis=='power')
+  #     @K: use up to the K-th moment
+  #     @interactions: add up to the K-th order interaction terms if TRUE
+  #------------------------------------------------------------------------------------------
+  
   
   res.list <- list()
   if (is.null(X_)) {
@@ -413,20 +437,32 @@ osqp_kernel_sbwATE <- function(X,A,Y,
   
   nX <- ncol(X_)
   n1 <- sum(A); n0 <- sum(1-A)
-  n <- n1 + n0
   Xt <- X_[A==1,]; Xc <- X_[A==0,]
   Yt <- Y[A==1]; Yc <- Y[A==0]
   
-  X_combined <- X_
-  X_combined[A == 1, ] <- Xt
-  X_combined[A == 0, ] <- -Xc
+  Xc_df <- as.data.frame(Xc)
+  Xt_df <- as.data.frame(Xt)
+  model_c <- lm(Yc ~ ., data = Xc_df)
+  model_t <- lm(Yt ~ ., data = Xt_df)
   
-  P.mat <- as(Matrix::.symDiagonal(n=n, x=1.), "dgCMatrix")
-  q.vec <- rep(-1/n, n)
+  X_df <- as.data.frame(X_)
+  colnames(X_df) <- colnames(Xt_df)
   
-  A.mat <- Matrix::Matrix(rbind(rep(1.,n),
-                                P.mat,
-                                t(X_combined)), sparse = TRUE)
+  m0 <- predict(model_c, newdata = X_df)
+  m1 <- predict(model_t, newdata = X_df)
+  
+  P.mat0 <- as(Matrix::.symDiagonal(n=n0, x=1.), "dgCMatrix")
+  q.vec0 <- rep(-1./n0,n0)
+  
+  P.mat1 <- as(Matrix::.symDiagonal(n=n1, x=1.), "dgCMatrix")
+  q.vec1 <- rep(-1./n1,n1)
+  
+  A.mat0 <- Matrix::Matrix(rbind(rep(1.,n0),
+                                 P.mat0,
+                                 t(Xc)), sparse = TRUE)
+  A.mat1 <- Matrix::Matrix(rbind(rep(1.,n1),
+                                 P.mat1,
+                                 t(Xt)), sparse = TRUE)
   
   if (is.null(osqp.setting)) {
     # use default one
@@ -436,21 +472,30 @@ osqp_kernel_sbwATE <- function(X,A,Y,
   }
   
   for (j in 1:length(delta.v)) {
-    l.vec <- c(1, rep(0.,n),
-               rep(0, nX) - delta.v[j] * rep(1,nX))
-    u.vec <- c(1, rep(1.,n),
-               rep(0, nX) + delta.v[j] * rep(1,nX))
+    l.vec0 <- c(1., rep(0.,n0),
+                colMeans(Xt) - delta.v[j] * rep(1,nX))
+    u.vec0 <- c(1., rep(1.,n0),
+                colMeans(Xt) + delta.v[j] * rep(1,nX))
+    
+    l.vec1 <- c(1., rep(0.,n1),
+                colMeans(Xc) - delta.v[j] * rep(1,nX))
+    u.vec1 <- c(1., rep(1.,n1),
+                colMeans(Xc) + delta.v[j] * rep(1,nX))
     if (j==1) {
-      model <- osqp::osqp(P.mat, q.vec, A.mat, l.vec, u.vec, settings)
+      model0 <- osqp::osqp(P.mat0, q.vec0, A.mat0, l.vec0, u.vec0, settings)
+      model1 <- osqp::osqp(P.mat1, q.vec1, A.mat1, l.vec1, u.vec1, settings)
     } else {
       model$Update(l = l.vec, u = u.vec)
     }
-    res <- model$Solve()
-    print(res$info$status)
-    res.list[[j]] <- list(res = res)
+    res0 <- model0$Solve()
+    res1 <- model1$Solve()
+    # if (res$info$status != "solved") {
+    #   warning(res$info$status)
+    # }
+    res.list[[j]] <- list(res0 = res0, res1 = res1, m0 = m0, m1 = m1)
   }
   return(res.list)
-}  
+}
 
 truncate_to_n <- function(number, n) {
   factor <- 10^n
