@@ -515,16 +515,18 @@ osqp_kernel_sbw_twofit <- function(X,A,Y,
   Xt <- X_[A==1,]; Xc <- X_[A==0,]
   Yt <- Y[A==1]; Yc <- Y[A==0]
   
-  Xc_df <- as.data.frame(Xc)
-  Xt_df <- as.data.frame(Xt)
-  model_c <- lm(Yc ~ ., data = Xc_df)
-  model_t <- lm(Yt ~ ., data = Xt_df)
-  
-  X_df <- as.data.frame(X_)
-  colnames(X_df) <- colnames(Xt_df)
-  
-  m0 <- predict(model_c, newdata = X_df)
-  m1 <- predict(model_t, newdata = X_df)
+  # Xc_df <- as.data.frame(Xc)
+  # Xt_df <- as.data.frame(Xt)
+  # model_c <- lm(Yc ~ ., data = Xc_df)
+  # model_t <- lm(Yt ~ ., data = Xt_df)
+  # 
+  # X_df <- as.data.frame(X_)
+  # colnames(X_df) <- colnames(Xt_df)
+  # 
+  # m0 <- predict(model_c, newdata = X_df)
+  # m1 <- predict(model_t, newdata = X_df)
+  m0 <- 0
+  m1 <- 1
   
   P.mat0 <- as(Matrix::.symDiagonal(n=n0, x=1.), "dgCMatrix")
   q.vec0 <- rep(-1./n0,n0)

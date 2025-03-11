@@ -26,7 +26,7 @@ if(!file.exists(img_tmp_dir)){
 
 # Values for simulations
 n_values <- c(10000)
-subset_values <- c(5, 10, 15)
+subset_values <- c(5, 10)
 
 # FULL SIMULATIONS----
 grid_vals <- as.data.table(expand.grid(n = n_values, kernel_approx = c(TRUE, FALSE)))
@@ -94,7 +94,7 @@ seq_row <- seq_len(nrow(grid_vals))
 if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
   cblb <- readRDS(file.path(temp_dir, 'cblb_bootstrap.rds'))
 } else{
-  cblb <- lapply(seq_row, function(i){
+  cblb <- lapply(seq_row[4], function(i){
     grid_val <- grid_vals[i]
     n <- grid_val$n
     subsets <- grid_val$subsets
@@ -105,8 +105,9 @@ if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
     out <- pblapply(seq_len(replications), function(rp){
       set.seed(rp)
       dat <- kangschafer3(n = n, te = te, sigma = sigma, beta_overlap = 0.5)
-      return(causal_blb_stable_noaugment(data = dat, b = b, subsets = subsets, kernel_approx = kernel_approx))
-    }, cl = 4)
+      return(causal_blb_stable(data = dat, b = b, subsets = subsets, kernel_approx = kernel_approx,
+                               augment = FALSE))
+    }, cl = 1)
     
     out <- rbindlist(out)
     out[, `:=`(n = n, subsets = subsets, gamma = gamma, kernel_approx = kernel_approx)]
