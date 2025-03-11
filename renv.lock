@@ -377,6 +377,19 @@
       ],
       "Hash": "dbca60742be0c9eddc5205e5c7ca1f44"
     },
+    "osqp": {
+      "Package": "osqp",
+      "Version": "0.6.3.2",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "Matrix",
+        "R6",
+        "Rcpp",
+        "methods"
+      ],
+      "Hash": "e024cccc110a810e942c98a4a6de6795"
+    },
     "pbapply": {
       "Package": "pbapply",
       "Version": "1.7-2",
