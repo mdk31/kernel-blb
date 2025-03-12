@@ -548,6 +548,21 @@
       ],
       "Hash": "4c8415e0ec1e29f3f4f6fc108bef0144"
     },
+    "sbw": {
+      "Package": "sbw",
+      "Version": "1.1.9",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "MASS",
+        "Matrix",
+        "R",
+        "quadprog",
+        "slam",
+        "spatstat.univar"
+      ],
+      "Hash": "13e0da12090010a3f375c53aa2adc6b9"
+    },
     "scales": {
       "Package": "scales",
       "Version": "1.3.0",
@@ -567,6 +582,44 @@
         "viridisLite"
       ],
       "Hash": "c19df082ba346b0ffa6f833e92de34d1"
+    },
+    "slam": {
+      "Package": "slam",
+      "Version": "0.1-55",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R",
+        "stats"
+      ],
+      "Hash": "a2a11fdcb7cf5afbf31aeb0e3828fbf6"
+    },
+    "spatstat.univar": {
+      "Package": "spatstat.univar",
+      "Version": "3.1-2",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R",
+        "spatstat.utils",
+        "stats"
+      ],
+      "Hash": "30838ea2cb0f89f7ebf8ebcad58eae53"
+    },
+    "spatstat.utils": {
+      "Package": "spatstat.utils",
+      "Version": "3.1-2",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Requirements": [
+        "R",
+        "grDevices",
+        "graphics",
+        "methods",
+        "stats",
+        "utils"
+      ],
+      "Hash": "b821ddbaf0a7a0a8dd0b1dc5e2c0e6b5"
     },
     "tibble": {
       "Package": "tibble",
