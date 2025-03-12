@@ -219,7 +219,7 @@ causal_blb_aipw <- function(data, b, subsets,  degree1, degree2, k1, k2, operato
 }
 
 causal_blb_stable <- function(data, b, subsets, kernel_approx = TRUE, disjoint = TRUE, augment = FALSE,
-                              delta.v = 1e-4, kernel_type = 'rbfdot'){
+                              delta.v = 1e-4, kernel_type = 'rbfdot', eig_clip = NULL){
   if(data.table::is.data.table(data) == FALSE){
     data <- data.table::as.data.table(data)
   }
@@ -360,7 +360,7 @@ kernel.basis <- function(X,A,Y,
                          kernel.approximation=TRUE,
                          dim.reduction=FALSE,
                          c = NULL, l=NULL, s=NULL, gamma=NULL, U.mat = NULL,
-                         kernel_type = 'rbfdot') {
+                         kernel_type = 'rbfdot', eig_clip = NULL) {
   n <- nrow(X)
   if (kernel.approximation) {
     if (is.null(c)) {
@@ -406,7 +406,9 @@ kernel.basis <- function(X,A,Y,
     gram.mat <- makeK_noparallel(X, kernel_type = kernel_type)
     res = RSpectra::eigs_sym(gram.mat, c, which = "LM")
     # CLIP NEGATIVE
-    res$values[res$values < 1e-10] <- 1e-10
+    if(!is.null(eig_clip)){
+      res$values[res$values < eig_clip] <- eig_clip
+    }
     X_ <- if(is.null(U.mat)) {
       res$vectors %*% diag(1/sqrt(res$values))
     } else{
@@ -473,7 +475,8 @@ osqp_kernel_sbw_twofit <- function(X,A,Y,
                                    basis="kernel", kernel.approximation=TRUE,
                                    c = NULL, l=NULL, gamma=NULL, U.mat = NULL,
                                    dim.reduction=FALSE, s=NULL,
-                                   K=2, interactions=FALSE) {
+                                   K=2, interactions=FALSE, kernel_type = 'rbfdot',
+                                   eig_clip = NULL) {
   
   #------------------------------------------------------------------------------------------
   # @X: covariates (n x d matrix)
@@ -505,7 +508,8 @@ osqp_kernel_sbw_twofit <- function(X,A,Y,
       X_ <- kernel.basis(X,A,Y, 
                          kernel.approximation=kernel.approximation, 
                          c=c, l=l, gamma=gamma, U.mat=U.mat,
-                         s=s, dim.reduction=dim.reduction)
+                         s=s, dim.reduction=dim.reduction, kernel_type = kernel_type,
+                         eig_clip = eig_clip)
     } 
     
     else if (basis=="power") {

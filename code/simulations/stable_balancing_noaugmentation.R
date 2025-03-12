@@ -29,7 +29,10 @@ n_values <- c(10000)
 subset_values <- c(5, 10)
 
 # FULL SIMULATIONS----
-grid_vals <- as.data.table(expand.grid(n = n_values, kernel_approx = c(TRUE, FALSE)))
+grid_vals <- as.data.table(expand.grid(n = n_values, 
+                                       kernel_approx = c(TRUE, FALSE),
+                                       kernel_type = c('rbfdot', 'vanilladot')))
+grid_vals <- grid_vals[!(kernel_type == 'vanilladot' & kernel_approx)]
 seq_row <- seq_len(nrow(grid_vals))
 
 if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
@@ -39,6 +42,12 @@ if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
     grid_val <- grid_vals[i]
     n <- grid_val$n
     kernel_approx <- grid_val$kernel_approx
+    kernel_type <- grid_val$kernel_type
+    if(kernel_type == 'vanilladot'){
+      eig_clip <- 1e-10
+    } else{
+      eig_clip <- NULL
+    }
 
     out <- pblapply(seq_len(replications), function(rp){
       set.seed(rp)
@@ -48,7 +57,7 @@ if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
                                        Y = dat$y,
                                        delta.v=1e-4,
                                        kernel.approximation = kernel_approx,
-                                       c = 100)
+                                       c = 100, kernel_type = kernel_type, eig_clip = eig_clip)
       
       weights0 <- output[[1]]$res0$x
       weights1 <- output[[1]]$res1$x
@@ -88,13 +97,14 @@ if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
 grid_vals <- as.data.table(expand.grid(n = n_values,
                          subsets = subset_values,
                          kernel_approx = c(TRUE, FALSE)))
+grid_vals <- grid_vals[!(kernel_type == 'vanilladot' & kernel_approx)]
 grid_vals[, `:=`(gamma = calculate_gamma(n, subsets))]
 seq_row <- seq_len(nrow(grid_vals))
 
 if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
   cblb <- readRDS(file.path(temp_dir, 'cblb_bootstrap.rds'))
 } else{
-  cblb <- lapply(seq_row[4], function(i){
+  cblb <- lapply(seq_row, function(i){
     grid_val <- grid_vals[i]
     n <- grid_val$n
     subsets <- grid_val$subsets
