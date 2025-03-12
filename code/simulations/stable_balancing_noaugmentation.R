@@ -25,7 +25,7 @@ if(!file.exists(img_tmp_dir)){
 }
 
 # Values for simulations
-n_values <- c(10000)
+n_values <- c(5000)
 subset_values <- c(5, 10)
 
 # FULL SIMULATIONS----
@@ -85,7 +85,7 @@ if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
                         se = c(sd(blb_reps))))
     }, cl = 4)
     out <- rbindlist(out)
-    out[, `:=`(n = n, kernel_approx = kernel_approx)]
+    out[, `:=`(n = n, kernel_approx = kernel_approx, kernel_type = kernel_type)]
     out
   })
   full <- rbindlist(cblb)
@@ -96,7 +96,8 @@ if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
 # cBLB SIMULATIONS----
 grid_vals <- as.data.table(expand.grid(n = n_values,
                          subsets = subset_values,
-                         kernel_approx = c(TRUE, FALSE)))
+                         kernel_approx = c(TRUE, FALSE),
+                         kernel_type = c('rbfdot', 'vanilladot')))
 grid_vals <- grid_vals[!(kernel_type == 'vanilladot' & kernel_approx)]
 grid_vals[, `:=`(gamma = calculate_gamma(n, subsets))]
 seq_row <- seq_len(nrow(grid_vals))
@@ -111,21 +112,30 @@ if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
     gamma <- grid_val$gamma
     b <- floor(n^gamma)
     kernel_approx <- grid_val$kernel_approx
+    kernel_type <- grid_val$kernel_type
+    if(kernel_type == 'vanilladot'){
+      eig_clip <- 1e-10
+    } else{
+      eig_clip <- NULL
+    }
+    
     
     out <- pblapply(seq_len(replications), function(rp){
       set.seed(rp)
       dat <- kangschafer3(n = n, te = te, sigma = sigma, beta_overlap = 0.5)
       return(causal_blb_stable(data = dat, b = b, subsets = subsets, kernel_approx = kernel_approx,
-                               augment = FALSE))
+                               augment = FALSE, eig_clip = eig_clip, kernel_type = kernel_type))
     }, cl = 1)
     
     out <- rbindlist(out)
-    out[, `:=`(n = n, subsets = subsets, gamma = gamma, kernel_approx = kernel_approx)]
+    out[, `:=`(n = n, subsets = subsets, gamma = gamma, kernel_approx = kernel_approx,
+               kernel_type = kernel_type)]
     out
   })
   cblb <- rbindlist(cblb)
   saveRDS(cblb, file.path(temp_dir, 'cblb_bootstrap.rds'))
 }
 
-full[, .(mean(lower_ci <= te & upper_ci >= te)), by = c('n', 'kernel_approx')]
-cblb[, .(mean(lower_ci <= te & upper_ci >= te)), by = c('n', 'subsets', 'gamma', 'kernel_approx')]
+full[, .(mean(lower_ci <= te & upper_ci >= te)), by = c('n', 'kernel_approx', 'kernel_type')]
+cblb[, .(mean(lower_ci <= te & upper_ci >= te)), by = c('n', 'subsets', 'gamma', 'kernel_approx',
+                                                        'kernel_type')]
