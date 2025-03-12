@@ -219,7 +219,7 @@ causal_blb_aipw <- function(data, b, subsets,  degree1, degree2, k1, k2, operato
 }
 
 causal_blb_stable <- function(data, b, subsets, kernel_approx = TRUE, disjoint = TRUE, augment = FALSE,
-                              delta.v = 1e-4){
+                              delta.v = 1e-4, kernel_type = 'rbfdot'){
   if(data.table::is.data.table(data) == FALSE){
     data <- data.table::as.data.table(data)
   }
@@ -359,7 +359,8 @@ kangschafer3 <- function(n, te, sigma, beta_overlap = 0.5){
 kernel.basis <- function(X,A,Y, 
                          kernel.approximation=TRUE,
                          dim.reduction=FALSE,
-                         c = NULL, l=NULL, s=NULL, gamma=NULL, U.mat = NULL) {
+                         c = NULL, l=NULL, s=NULL, gamma=NULL, U.mat = NULL,
+                         kernel_type = 'rbfdot') {
   n <- nrow(X)
   if (kernel.approximation) {
     if (is.null(c)) {
@@ -402,7 +403,7 @@ kernel.basis <- function(X,A,Y,
     }
   } else{
     # O(n^2) spoce-, O(n^3) time-complexity
-    gram.mat <- makeK_noparallel(X)
+    gram.mat <- makeK_noparallel(X, kernel_type = kernel_type)
     res = RSpectra::eigs_sym(gram.mat, c, which = "LM")
     # CLIP NEGATIVE
     res$values[res$values < 1e-10] <- 1e-10
@@ -415,7 +416,8 @@ kernel.basis <- function(X,A,Y,
   return(X_)
 }
 
-makeK_noparallel <- function(allx, useasbases=NULL, b=NULL, linkernel = FALSE, scale = TRUE){
+makeK_noparallel <- function(allx, useasbases=NULL, b=NULL, linkernel = FALSE, scale = TRUE,
+                             kernel_type = 'rbfdot'){
   N=nrow(allx)
   # If no "useasbasis" given, assume all observations are to be used.
   if(is.null(useasbases)) {useasbases = rep(1, N)}
@@ -432,7 +434,13 @@ makeK_noparallel <- function(allx, useasbases=NULL, b=NULL, linkernel = FALSE, s
     K <- allx  # Linear kernel case
   } else {
     if (sum(useasbases) == N) {
-      K <- kernlab::kernelMatrix(kernlab::rbfdot(), allx)
+      if (kernel_type == "rbfdot") {
+        K <- kernlab::kernelMatrix(kernlab::rbfdot(), allx)
+      } else if (kernel_type == "vanilladot") {
+        K <- kernlab::kernelMatrix(kernlab::vanilladot(), allx)
+      } else {
+        stop("Invalid kernel_type. Choose 'rbfdot' or 'vanilladot'.")
+      }
     } 
   }
   return(K)
