@@ -87,7 +87,7 @@ if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
     out <- pblapply(seq_len(replications), function(rp){
       set.seed(rp)
       dat <- kangschafer3(n = n, te = te, sigma = sigma, beta_overlap = 0.5)
-      return(causal_blb_aipw(data = dat, b = b, subsets = subsets, degree1, degree2, k1, k2, operator, penal))
+      return(causal_blb_optimal(data = dat, b = b, subsets = subsets, degree1, degree2, k1, k2, operator, penal))
     }, cl = 4)
     
     out <- rbindlist(out)

@@ -341,19 +341,19 @@ crossfit_estimator <- function(data, K = 10){
   return(rbindlist(crossfit_dt))
 }
 
-estimate_optimal_regime <- function(data, covariates, A, initial_params, lambda){
+estimate_optimal_regime <- function(data, r_tilde_form, covariates, A, initial_params, lambda){
   
   num_params <- nrow(data)
   X <- data[, covariates]
-  A <- data[[A]]
+  Aval <- data[[A]]
   K_matrix <- kernelMatrix(kernlab::vanilladot(), as.matrix(X))
-  r_tilde <- train_aol(dat)
+  r_tilde <- train_aol(dat, formula = r_tilde_form, A = A)
   
   opt_result <- optim(
     par = initial_params,
     fn = aol_loss,
     X = X,
-    A = A,
+    A = Aval,
     r_tilde = r_tilde,
     K_matrix = K_matrix,
     lambda = lambda,
