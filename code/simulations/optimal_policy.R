@@ -86,7 +86,7 @@ if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
     
     out <- pblapply(seq_len(replications), function(rp){
       set.seed(rp)
-      dat <- kangschafer3(n = n, te = te, sigma = sigma, beta_overlap = 0.5)
+      dat <- aol_dgp(n = n)
       return(causal_blb_policy(data = dat,
                                y = 'y',
                                A = 'A',
