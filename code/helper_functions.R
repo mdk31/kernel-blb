@@ -236,6 +236,7 @@ causal_blb_policy <- function(data, y, A, b, subsets, lambda, initial_params, r_
                                                 y = y,
                                                 initial_params = initial_params, lambda = lambda) 
     M <- rmultinom(n = B, size = n, prob = rep(1, n))
+    browser()
     
     boot_reps <- sapply(seq_len(B), function(bt){
       sum(M[, bt]*tmp_dat[[y]]/0.5*(tmp_dat[[A]] == estim_opt_regime))/n

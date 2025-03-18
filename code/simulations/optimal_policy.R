@@ -90,8 +90,8 @@ if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
       return(causal_blb_policy(data = dat,
                                y = 'y',
                                A = 'A',
-                               r_tilde_form = y ~ A,
-                               covariates = c('x1', 'x2'),
+                               r_tilde_form = y ~ x1 + x2 + x3 + x4 + x5 + A + A:x1 + A:x2,
+                               covariates = c('x1', 'x2', 'x3', 'x4', 'x5'),
                                initial_params =  c(rep(0, b), 0),
                                lambda = 0.01,
                                b = b, subsets = subsets))
