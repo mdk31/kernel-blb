@@ -218,7 +218,8 @@ causal_blb_aipw <- function(data, b, subsets,  degree1, degree2, k1, k2, operato
   return(blb_out)
 }
 
-causal_blb_policy <- function(data, y, A, b, subsets, lambda, initial_params, disjoint = TRUE){
+causal_blb_policy <- function(data, y, A, b, subsets, lambda, initial_params, r_tilde_form, covariates,
+                              disjoint = TRUE){
   if(data.table::is.data.table(data) == FALSE){
     data <- data.table::as.data.table(data)
   }
@@ -228,7 +229,11 @@ causal_blb_policy <- function(data, y, A, b, subsets, lambda, initial_params, di
   
   blb_out <- lapply(partitions, function(i){
     tmp_dat <- data[i]
-    estim_opt_regime <- estimate_optimal_regime(data, initial_params, lambda) 
+    estim_opt_regime <- estimate_optimal_regime(data = tmp_dat, 
+                                                r_tilde_form = r_tilde_form, 
+                                                covariates = covariates, 
+                                                A = A, 
+                                                initial_params = initial_params, lambda = lambda) 
     M <- rmultinom(n = B, size = n, prob = rep(1, n))
     
     boot_reps <- sapply(seq_len(B), function(bt){
