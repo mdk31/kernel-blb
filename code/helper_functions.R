@@ -349,7 +349,7 @@ crossfit_estimator <- function(data, K = 10){
 estimate_optimal_regime <- function(data, r_tilde_form, covariates, A, initial_params, lambda){
   
   num_params <- nrow(data)
-  X <- data[, c(covariates)]
+  X <- data[, c(covariates), with = FALSE]
   Aval <- data[[A]]
   K_matrix <- kernlab::kernelMatrix(kernlab::vanilladot(), as.matrix(X))
   r_tilde <- train_aol(dat, formula = r_tilde_form, A = A)
