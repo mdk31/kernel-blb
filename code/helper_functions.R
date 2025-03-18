@@ -232,7 +232,8 @@ causal_blb_policy <- function(data, y, A, b, subsets, lambda, initial_params, r_
     estim_opt_regime <- estimate_optimal_regime(data = tmp_dat, 
                                                 r_tilde_form = r_tilde_form, 
                                                 covariates = covariates, 
-                                                A = A, 
+                                                A = A,
+                                                y = y,
                                                 initial_params = initial_params, lambda = lambda) 
     M <- rmultinom(n = B, size = n, prob = rep(1, n))
     
@@ -346,13 +347,13 @@ crossfit_estimator <- function(data, K = 10){
   return(rbindlist(crossfit_dt))
 }
 
-estimate_optimal_regime <- function(data, r_tilde_form, covariates, A, initial_params, lambda){
+estimate_optimal_regime <- function(data, r_tilde_form, covariates, A, y, initial_params, lambda){
   
   num_params <- nrow(data)
   X <- data[, c(covariates), with = FALSE]
   Aval <- data[[A]]
   K_matrix <- kernlab::kernelMatrix(kernlab::vanilladot(), as.matrix(X))
-  r_tilde <- train_aol(dat = data, formula = r_tilde_form, A = A)
+  r_tilde <- train_aol(dat = data, formula = r_tilde_form, A = A, y = y)
   
   opt_result <- optim(
     par = initial_params,
