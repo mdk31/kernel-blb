@@ -218,6 +218,38 @@ causal_blb_aipw <- function(data, b, subsets,  degree1, degree2, k1, k2, operato
   return(blb_out)
 }
 
+causal_blb_policy <- function(data, y, A, b, subsets, lambda, initial_params, disjoint = TRUE){
+  if(data.table::is.data.table(data) == FALSE){
+    data <- data.table::as.data.table(data)
+  }
+  n <- nrow(data)
+  partitions <- make_partition(n = n, subsets = subsets, b = b, disjoint = disjoint)
+  idx <- seq_len(b)
+  
+  blb_out <- lapply(partitions, function(i){
+    tmp_dat <- data[i]
+    estim_opt_regime <- estimate_optimal_regime(data, initial_params, lambda) 
+    M <- rmultinom(n = B, size = n, prob = rep(1, n))
+    
+    boot_reps <- sapply(seq_len(B), function(bt){
+      sum(M[, bt]*tmp_dat[[y]]/0.5*(tmp_dat[[A]] == estim_opt_regime))/n
+    })
+    
+    perc_ci <- boot:::perc.ci(blb_reps)
+    return(data.table(lower_ci = perc_ci[4],
+                      upper_ci = perc_ci[5],
+                      estim = mean(blb_reps),
+                      se = sd(blb_reps)))
+  })
+  
+  blb_out <- rbindlist(blb_out)
+  blb_out <- blb_out[, .(lower_ci = mean(lower_ci),
+                         upper_ci = mean(upper_ci),
+                         estim = mean(estim),
+                         se = mean(se))]
+  return(blb_out)
+}
+
 causal_blb_stable <- function(data, b, subsets, kernel_approx = TRUE, disjoint = TRUE, augment = FALSE,
                               delta.v = 1e-4, kernel_type = 'rbfdot', eig_clip = NULL){
   if(data.table::is.data.table(data) == FALSE){
