@@ -352,7 +352,7 @@ estimate_optimal_regime <- function(data, r_tilde_form, covariates, A, initial_p
   X <- data[, c(covariates), with = FALSE]
   Aval <- data[[A]]
   K_matrix <- kernlab::kernelMatrix(kernlab::vanilladot(), as.matrix(X))
-  r_tilde <- train_aol(dat, formula = r_tilde_form, A = A)
+  r_tilde <- train_aol(dat = data, formula = r_tilde_form, A = A)
   
   opt_result <- optim(
     par = initial_params,
