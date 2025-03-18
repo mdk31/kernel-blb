@@ -618,6 +618,23 @@ osqp_kernel_sbw_twofit <- function(X,A,Y,
   return(res.list)
 }
 
+train_aol <- function(dat, formula, A, y){
+  # mu_y <- lm(y ~ x1 + x2 + x3 + x4 + x5 + A + A:x1 + A:x2, data = dat)
+  mu_y <- lm(as.formula(formula), data = dat)
+  
+  pred_dat <- copy(dat)
+  pred_dat[[A]] <- -1
+  mu_y0 <- predict(mu_y, pred_dat)
+  
+  pred_dat <- copy(dat)
+  pred_dat[[A]] <- 1
+  mu_y1 <- predict(mu_y, pred_dat)
+  
+  g_tilde <- dat[[y]] - (0.5 * mu_y0 + 0.5 * mu_y1)
+  
+  return(g_tilde)
+}
+
 truncate_to_n <- function(number, n) {
   factor <- 10^n
   truncated <- trunc(number * factor) / factor
