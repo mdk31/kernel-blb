@@ -27,46 +27,46 @@ if(!file.exists(img_tmp_dir)){
 }
 
 # Values for simulations
-n_values <- c(10000)
+n_values <- c(5000)
 subset_values <- c(5, 10, 15)
 
-# FULL SIMULATIONS----
-grid_vals <- as.data.table(expand.grid(n = n_values))
-seq_row <- seq_len(nrow(grid_vals))
-
-if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
-  cblb <- readRDS(file.path(temp_dir, 'full_bootstrap.rds'))
-} else{
-  cblb <- lapply(seq_row, function(i){
-    grid_val <- grid_vals[i]
-    n <- grid_val$n
-
-    out <- pblapply(seq_len(replications), function(rp){
-      set.seed(rp)
-      dat <- aol_dgp(n = n)
-      lambda <- 0.01
-      initial_params <- c(rep(0, n), 0)  # Initial v and b
-      estim_opt_regime <- estimate_optimal_regime(data, initial_params, lambda) 
-      M <- rmultinom(n = B, size = n, prob = rep(1, n))
-      
-      boot_reps <- sapply(seq_len(B), function(bt){
-        sum(M[, bt]*dat$y/0.5*(dat$A == estim_opt_regime))/n
-      })
-      
-      perc_ci <- boot:::perc.ci(boot_reps)
-      return(data.table(lower_ci = perc_ci[4],
-                        upper_ci = perc_ci[5],
-                        estim = mean(boot_reps),
-                        se = sd(boot_reps)))
-    }, cl = 4)
-    out <- rbindlist(out)
-    out[, `:=`(n = n)]
-    out
-  })
-  cblb <- rbindlist(cblb)
-  saveRDS(cblb, file.path(temp_dir, 'full_bootstrap.rds'))
-}
-
+# # FULL SIMULATIONS----
+# grid_vals <- as.data.table(expand.grid(n = n_values))
+# seq_row <- seq_len(nrow(grid_vals))
+# 
+# if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
+#   cblb <- readRDS(file.path(temp_dir, 'full_bootstrap.rds'))
+# } else{
+#   cblb <- lapply(seq_row, function(i){
+#     grid_val <- grid_vals[i]
+#     n <- grid_val$n
+# 
+#     out <- pblapply(seq_len(replications), function(rp){
+#       set.seed(rp)
+#       dat <- aol_dgp(n = n)
+#       lambda <- 0.01
+#       initial_params <- c(rep(0, n), 0)  # Initial v and b
+#       estim_opt_regime <- estimate_optimal_regime(data, initial_params, lambda) 
+#       M <- rmultinom(n = B, size = n, prob = rep(1, n))
+#       
+#       boot_reps <- sapply(seq_len(B), function(bt){
+#         sum(M[, bt]*dat$y/0.5*(dat$A == estim_opt_regime))/n
+#       })
+#       
+#       perc_ci <- boot:::perc.ci(boot_reps)
+#       return(data.table(lower_ci = perc_ci[4],
+#                         upper_ci = perc_ci[5],
+#                         estim = mean(boot_reps),
+#                         se = sd(boot_reps)))
+#     }, cl = 4)
+#     out <- rbindlist(out)
+#     out[, `:=`(n = n)]
+#     out
+#   })
+#   cblb <- rbindlist(cblb)
+#   saveRDS(cblb, file.path(temp_dir, 'full_bootstrap.rds'))
+# }
+# 
 
 # cBLB SIMULATIONS----
 grid_vals <- as.data.table(expand.grid(n = n_values,
@@ -95,12 +95,13 @@ if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
                                initial_params =  c(rep(0, b), 0),
                                lambda = 0.01,
                                b = b, subsets = subsets))
-    }, cl = 1)
+    }, cl = 4)
     
     out <- rbindlist(out)
-    out[, `:=`(n = n)]
+    out[, `:=`(n = n, subsets = subsets, gamma = gamma)]
     out
   })
   cblb <- rbindlist(cblb)
   saveRDS(cblb, file.path(temp_dir, 'cblb_bootstrap.rds'))
 }
+
