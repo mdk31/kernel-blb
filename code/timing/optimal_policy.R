@@ -45,7 +45,7 @@ if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
       dat <- aol_dgp(n = n)
       lambda <- 0.01
       initial_params <- c(rep(0, n), 0)  # Initial v and b
-      time <- system.time({
+      timing <- system.time({
         estim_opt_regime <- estimate_optimal_regime(data = dat, 
                                                     r_tilde_form = y ~ x1 + x2 + x3 + x4 + x5 + A + A:x1 + A:x2, 
                                                     covariates = c('x1', 'x2', 'x3', 'x4', 'x5'), 
@@ -61,10 +61,7 @@ if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
         perc_ci <- boot:::perc.ci(boot_reps)
       })
 
-      return(data.table(lower_ci = perc_ci[4],
-                        upper_ci = perc_ci[5],
-                        estim = mean(boot_reps),
-                        se = sd(boot_reps)))
+      return(data.table(time_elapsed = timing['elapsed']))
     }, cl = 1)
     out <- rbindlist(out)
     out[, `:=`(n = n)]
@@ -94,14 +91,17 @@ if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
     out <- pblapply(seq_len(replications), function(rp){
       set.seed(rp)
       dat <- aol_dgp(n = n)
-      return(causal_blb_policy(data = dat,
+      timing <- system.time({
+        causal_blb_policy(data = dat,
                                y = 'y',
                                A = 'A',
                                r_tilde_form = y ~ x1 + x2 + x3 + x4 + x5 + A + A:x1 + A:x2,
                                covariates = c('x1', 'x2', 'x3', 'x4', 'x5'),
                                initial_params =  c(rep(0, b), 0),
                                lambda = 0.01,
-                               b = b, subsets = subsets))
+                               b = b, subsets = subsets)
+      })
+    return(data.table(time_elapsed = timing['elapsed']))
     }, cl = 1)
     
     out <- rbindlist(out)
