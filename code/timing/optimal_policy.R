@@ -45,20 +45,22 @@ if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
       dat <- aol_dgp(n = n)
       lambda <- 0.01
       initial_params <- c(rep(0, n), 0)  # Initial v and b
-      estim_opt_regime <- estimate_optimal_regime(data = dat, 
-                                                  r_tilde_form = y ~ x1 + x2 + x3 + x4 + x5 + A + A:x1 + A:x2, 
-                                                  covariates = c('x1', 'x2', 'x3', 'x4', 'x5'), 
-                                                  A = 'A', y = 'y', 
-                                                  initial_params = initial_params, 
-                                                  lambda = lambda)
-      browser()
-      M <- rmultinom(n = B, size = n, prob = rep(1, n))
-
-      boot_reps <- sapply(seq_len(B), function(bt){
-        sum(M[, bt]*dat$y/0.5*(dat$A == estim_opt_regime))/n
+      time <- system.time({
+        estim_opt_regime <- estimate_optimal_regime(data = dat, 
+                                                    r_tilde_form = y ~ x1 + x2 + x3 + x4 + x5 + A + A:x1 + A:x2, 
+                                                    covariates = c('x1', 'x2', 'x3', 'x4', 'x5'), 
+                                                    A = 'A', y = 'y', 
+                                                    initial_params = initial_params, 
+                                                    lambda = lambda)
+        M <- rmultinom(n = B, size = n, prob = rep(1, n))
+        
+        boot_reps <- sapply(seq_len(B), function(bt){
+          sum(M[, bt]*dat$y/0.5*(dat$A == estim_opt_regime))/n
+        })
+        
+        perc_ci <- boot:::perc.ci(boot_reps)
       })
 
-      perc_ci <- boot:::perc.ci(boot_reps)
       return(data.table(lower_ci = perc_ci[4],
                         upper_ci = perc_ci[5],
                         estim = mean(boot_reps),

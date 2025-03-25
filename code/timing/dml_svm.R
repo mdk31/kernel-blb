@@ -53,7 +53,7 @@ if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
         
         boot_ci <- boot:::perc.ci((boot_reps))
       })
-      return(data.table(time_elapsed = time['elapsed']))
+      return(data.table(time_elapsed = timing['elapsed']))
     })
     out <- rbindlist(out)
     out[, `:=`(n = n)]
