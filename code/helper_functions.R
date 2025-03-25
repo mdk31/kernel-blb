@@ -350,7 +350,7 @@ crossfit_estimator <- function(data, K = 10){
 estimate_optimal_regime <- function(data, r_tilde_form, covariates, A, y, initial_params, lambda){
   
   if(data.table::is.data.table(data) == FALSE){
-    data <- data.table::as.data.table(dat)
+    data <- data.table::as.data.table(data)
   }
   
   num_params <- nrow(data)
