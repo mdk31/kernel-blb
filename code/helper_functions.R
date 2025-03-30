@@ -651,7 +651,7 @@ truncate_to_n <- function(number, n) {
   return(truncated)
 }
 
-zip_plots <- function(data, zip_labels, n, use_case, image_path, subsets = NULL, gamma = NULL,
+zip_plots <- function(data, zip_labels, n, use_case, image_path, plot_title, subsets = NULL, gamma = NULL,
                       text_x = 0.75, text_y = 50){
   assertthat::assert_that(!((is.null((subsets) & !is.null(gamma)) | (!is.null(subsets) & is.null(gamma)))))
   if(data.table::is.data.table(data) == FALSE){
@@ -661,13 +661,13 @@ zip_plots <- function(data, zip_labels, n, use_case, image_path, subsets = NULL,
   nm_prefix <- paste0(use_case, '_zip_plot_n', n)
   if(is.null(subsets)){
     nm <- paste0(nm_prefix, '_full.pdf')
-    title <- bquote(n == .(n))
+    title <- bquote(paste(plot_title, ' ', n == .(n)))
     ggsub <- data[n == n]
     label_sub <- zip_labels[n == n]
     
   } else{
     nm <- paste0(nm_prefix, '_subset_', subsets, '_gamma_', gamma, '_cblb.pdf')
-    title <- bquote(paste(s == .(subsets), ' and ', gamma == .(gamma), ' and ', n == .(n)))
+    title <- bquote(paste(plot_title, ' ', s == .(subsets), ' and ', gamma == .(gamma), ' and ', n == .(n)))
     ggsub <- data[n == n & subsets == subsets & gamma == gamma]
     label_sub <- zip_labels[n == n & subsets == subsets & gamma == gamma]
   }
