@@ -101,9 +101,11 @@ if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
     }, cl = 1)
     
     out <- rbindlist(out)
-    out[, `:=`(n = n)]
+    out[, `:=`(n = n, subsets = subsets, gamma = gamma)]
     out
   })
   cblb <- rbindlist(cblb)
   saveRDS(cblb, file.path(temp_dir, 'cblb_bootstrap.rds'))
 }
+
+output <- zip_plots_helper(data = cblb, type = 'blb')
