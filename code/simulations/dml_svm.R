@@ -97,3 +97,15 @@ if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
   cblb <- rbindlist(cblb)
   saveRDS(cblb, file.path(temp_dir, 'cblb_bootstrap.rds'))
 }
+
+
+zip_plot_obj <- zip_plots_helper(data = cblb, type = 'blb', te = optimal_val)
+for(idx in seq_len(nrow(grid_vals))){
+  grid_row <- grid_vals[idx, ]
+  n <- grid_row$n
+  subsets <- grid_row$subsets
+  gamma <- grid_row$gamma
+  zip_plots(data = zip_plot_obj$zip, zip_labels = zip_plot_obj$zip_labels, n = n, subsets = subsets, 
+            gamma = gamma, use_case = 'policy', plot_title = 'Optimal value', te = optimal_val, image_path = img_tmp_dir, text_x = 0.89)
+}
+
