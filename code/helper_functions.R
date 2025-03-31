@@ -651,8 +651,8 @@ truncate_to_n <- function(number, n) {
   return(truncated)
 }
 
-zip_plots <- function(data, zip_labels, n, use_case, image_path, plot_title, subsets = NULL, gamma = NULL,
-                      text_x = 0.75, text_y = 50){
+zip_plots <- function(data, zip_labels, n, use_case, image_path, plot_title, te, 
+                      subsets = NULL, gamma = NULL, text_x = 0.75, text_y = 50){
   assertthat::assert_that(!((is.null((subsets) & !is.null(gamma)) | (!is.null(subsets) & is.null(gamma)))))
   if(data.table::is.data.table(data) == FALSE){
     data <- data.table::as.data.table(data)
@@ -667,7 +667,7 @@ zip_plots <- function(data, zip_labels, n, use_case, image_path, plot_title, sub
     
   } else{
     nm <- paste0(nm_prefix, '_subset_', subsets, '_gamma_', gamma, '_cblb.pdf')
-    title <- bquote(paste(plot_title, ' ', s == .(subsets), ' and ', gamma == .(gamma), ' and ', n == .(n)))
+    title <- bquote(paste(.(plot_title), ' ', s == .(subsets), ' and ', gamma == .(gamma), ' and ', n == .(n)))
     ggsub <- data[n == n & subsets == subsets & gamma == gamma]
     label_sub <- zip_labels[n == n & subsets == subsets & gamma == gamma]
   }
@@ -692,7 +692,7 @@ zip_plots <- function(data, zip_labels, n, use_case, image_path, plot_title, sub
   ggplot2::ggsave(file.path(image_path, nm), plot = p, height = 9, width = 7)
 }
 
-zip_plots_helper <- function(data, type){
+zip_plots_helper <- function(data, type, te){
   data[, `:=`(cent = abs(estim - te)/se)]
   if(type == 'full'){
     group_cols <- c('n')
