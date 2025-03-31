@@ -105,3 +105,7 @@ if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
   saveRDS(cblb, file.path(temp_dir, 'cblb_bootstrap.rds'))
 }
 
+zip_plot_obj <- zip_plots_helper(data = cblb, type = 'blb')
+
+zip_plots(data = zip_plot_obj$zip, zip_labels = zip_plot_obj$zip_labels, n = 5000, use_case = 'policy',
+          plot_title = 'Optimal Value')
