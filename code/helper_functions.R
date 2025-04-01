@@ -315,7 +315,7 @@ causal_blb_stable <- function(data, b, subsets, kernel_approx = TRUE, disjoint =
   return(blb_out)
 }
 
-crossfit_estimator <- function(data, K = 10){
+crossfit_estimator <- function(data, y, Tr, confounders, K = 10){
   if(data.table::is.data.table(data) == FALSE){
     data <- data.table::as.data.table(data)
   }
@@ -323,13 +323,16 @@ crossfit_estimator <- function(data, K = 10){
   fold_idx <- seq_len(nrow(data))
   folds <- split(fold_idx, sample(rep(1:K, length.out = length(fold_idx))))
   
+  m_formula <- as.formula(paste0(y, ' ~ Tr + ', paste(confounders, collapse = ' + ')))
+  g_formula <- as.formula(paste0(Tr, ' ~ ', paste(confounders, collapse = ' + ')))
+  
   crossfit_dt <- lapply(folds, function(test_idx){
     train_idx <- setdiff(fold_idx, test_idx)
     train_dat <- data[train_idx]
     test_dat <- data[-train_idx]
     
-    m <- e1071::svm(y ~ Tr + X1 + X2, data = train_dat, kernel = 'linear', type = 'eps-regression')
-    g <- e1071::svm(Tr ~ X1 + X2, data = train_dat, kernel = 'linear', type = 'C-classification', probability = TRUE)
+    m <- e1071::svm(m_formula, data = train_dat, kernel = 'linear', type = 'eps-regression')
+    g <- e1071::svm(g_formula, data = train_dat, kernel = 'linear', type = 'C-classification', probability = TRUE)
     
     prop_score <- attr(predict(g, newdata = test_dat, probability = TRUE), 'probabilities')[, 1]
     
