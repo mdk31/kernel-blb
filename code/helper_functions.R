@@ -336,11 +336,12 @@ crossfit_estimator <- function(data, y, Tr, confounders, K = 10){
     
     prop_score <- attr(predict(g, newdata = test_dat, probability = TRUE), 'probabilities')[, 1]
     
-    newdata <- data.frame(Tr = 1, X1 = test_dat$X1, X2 = test_dat$X2)
-    m1 <- predict(m, newdata = newdata)
+    confounder_data <- test_dat[, ..confounders]
+    newdata_1 <- data.frame(setNames(list(1), Tr), confounder_data)
+    newdata_0 <- data.frame(setNames(list(0), Tr), confounder_data)
     
-    newdata <- data.frame(Tr = 0, X1 = test_dat$X1, X2 = test_dat$X2)
-    m0 <- predict(m, newdata = newdata)
+    m1 <- predict(m, newdata = newdata_1)
+    m0 <- predict(m, newdata = newdata_0)
     
     test_dat$prop_score <- prop_score
     test_dat$m1 <- m1
