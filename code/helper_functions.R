@@ -102,8 +102,8 @@ aipw_kernel_weights <- function(data, Tr, y, confounder_names, degree1, degree2,
   
   res <- quadprog::solve.QP(Dmat = Dmat, dvec = dvec, Amat = Amat, bvec = bvec, meq = meq)
   
-  phi0 <- (1-data$Tr)*res$solution*(data$y - p0) + p0
-  phi1 <- (data$Tr)*res$solution*(data$y - p1) + p1
+  phi0 <- (1-data[[Tr]])*res$solution*(data[[y]] - p0) + p0
+  phi1 <- (data[[Tr]])*res$solution*(data[[y]] - p1) + p1
   
   return(list(phi1 = phi1, phi0 = phi0))
   
@@ -182,7 +182,7 @@ causal_blb <- function(data, b, subsets, disjoint = TRUE, K = 10){
   return(blb_out)
 }
 
-causal_blb_aipw <- function(data, b, subsets,  degree1, degree2, k1, k2, operator, penal, disjoint = TRUE){
+causal_blb_aipw <- function(data, y, Tr, confounders, b, subsets,  degree1, degree2, k1, k2, operator, penal, disjoint = TRUE){
   if(data.table::is.data.table(data) == FALSE){
     data <- data.table::as.data.table(data)
   }
@@ -192,7 +192,8 @@ causal_blb_aipw <- function(data, b, subsets,  degree1, degree2, k1, k2, operato
   
   blb_out <- lapply(partitions, function(i){
     tmp_dat <- data[i]
-    output <- aipw_kernel_weights(tmp_dat, degree1, degree2, k1, k2, operator, penal)
+    output <- aipw_kernel_weights(tmp_dat, Tr, y, confounders,
+                                  degree1, degree2, k1, k2, operator, penal)
     phi1 <- output$phi1
     phi0 <- output$phi0
     
