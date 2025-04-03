@@ -220,7 +220,7 @@ causal_blb_aipw <- function(data, y, Tr, confounders, b, subsets,  degree1, degr
 }
 
 causal_blb_policy <- function(data, y, A, b, subsets, lambda, initial_params, r_tilde_form, covariates,
-                              disjoint = TRUE){
+                              disjoint = TRUE, boundary = 0){
   if(data.table::is.data.table(data) == FALSE){
     data <- data.table::as.data.table(data)
   }
@@ -235,7 +235,8 @@ causal_blb_policy <- function(data, y, A, b, subsets, lambda, initial_params, r_
                                                 covariates = covariates, 
                                                 A = A,
                                                 y = y,
-                                                initial_params = initial_params, lambda = lambda) 
+                                                initial_params = initial_params, lambda = lambda,
+                                                boundary = boundary) 
     M <- rmultinom(n = B, size = n, prob = rep(1, b))
 
     blb_reps <- sapply(seq_len(B), function(bt){
@@ -352,7 +353,8 @@ crossfit_estimator <- function(data, y, Tr, confounders, K = 10){
   return(rbindlist(crossfit_dt))
 }
 
-estimate_optimal_regime <- function(data, r_tilde_form, covariates, A, y, initial_params, lambda){
+estimate_optimal_regime <- function(data, r_tilde_form, covariates, A, y, initial_params, lambda,
+                                    boundary = 0){
   
   if(data.table::is.data.table(data) == FALSE){
     data <- data.table::as.data.table(data)
@@ -379,7 +381,7 @@ estimate_optimal_regime <- function(data, r_tilde_form, covariates, A, y, initia
   v_opt <- opt_result$par[1:num_params]
   b_opt <- opt_result$par[num_params + 1]
   decision_boundary <- K_matrix %*% v_opt + b_opt
-  estim_opt_regime <- ifelse(decision_boundary > 0, 1, -1)
+  estim_opt_regime <- ifelse(decision_boundary > boundary, 1, -1)
   return(estim_opt_regime)
 }
 
