@@ -402,7 +402,6 @@ kangschafer3 <- function(n, te, sigma, beta_overlap = 0.5){
   return(out)
 }
 
-
 kernel.basis <- function(X,A,Y, 
                          kernel.approximation=TRUE,
                          dim.reduction=FALSE,
