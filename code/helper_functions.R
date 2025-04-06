@@ -666,6 +666,8 @@ zip_plots <- function(data, zip_labels, n, use_case, image_path, plot_title, te,
   nm_prefix <- paste0(use_case, '_zip_plot_n', n)
   ggsub <- data[n == n]
   label_sub <- zip_labels[n == n]
+  title <- bquote(paste(.(plot_title), ' ', n == .(n)))
+  
   # if(type == 'full'){
   #   nm <- paste0(nm_prefix, '_full.pdf')
   #   title <- bquote(paste(plot_title, ' ', n == .(n)))
