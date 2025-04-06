@@ -162,7 +162,7 @@ calculate_gamma <- function(n, subsets){
   return(truncate_to_n(soln, 5))
 }
 
-causal_blb <- function(data, y, Tr, b, subsets, disjoint = TRUE, K = 10){
+causal_blb <- function(data, y, Tr, confounders, b, subsets, disjoint = TRUE, K = 10){
   if(data.table::is.data.table(data) == FALSE){
     data <- data.table::as.data.table(data)
   }
@@ -173,7 +173,8 @@ causal_blb <- function(data, y, Tr, b, subsets, disjoint = TRUE, K = 10){
   blb_out <- lapply(partitions, function(i){
     tmp_dat <- data[i]
     folds <- split(idx, sample(rep(1:K, length.out = length(idx))))
-    crossfit <- crossfit_estimator(data = tmp_dat, y = y, Tr = Tr, K = K)
+    crossfit <- crossfit_estimator(data = tmp_dat, y = y, Tr = Tr, confounders = confounders,
+                                   K = K)
 
     M <- rmultinom(n = B, size = n, prob = rep(1, b))
     blb_reps <- sapply(seq_len(B), function(bt){
