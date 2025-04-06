@@ -6,7 +6,7 @@ aipw_kernel_weights <- function(data, Tr, y, confounder_names, degree1, degree2,
   
   intervention <- data[[Tr]]
   outcome <- data[[y]]
-  confounders <- data[..confounder_names]
+  confounders <- data[, ..confounder_names]
   n <- nrow(data)
   
   t1 <- as.integer(intervention)

@@ -36,7 +36,7 @@ if(!file.exists(img_tmp_dir)){
 }
 
 # Values for simulations
-n_values <- c(10000)
+n_values <- c(5000)
 subset_values <- c(5, 10, 15)
 
 # # FULL SIMULATIONS----
