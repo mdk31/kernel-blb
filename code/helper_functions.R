@@ -1,11 +1,10 @@
-aipw_kernel_weights <- function(data, Tr, y, confounder_names, degree1, degree2, k1, k2, operator, penal, bootstrap_size=length(data)){
+aipw_kernel_weights <- function(data, Tr, Y, confounder_names, degree1, degree2, k1, k2, operator, penal, bootstrap_size=length(data)){
   
   if(data.table::is.data.table(data) == FALSE){
     data <- data.table::as.data.table(data)
   }
-  
   intervention <- data[[Tr]]
-  outcome <- data[[y]]
+  outcome <- data[[Y]]
   confounders <- data[, ..confounder_names]
   n <- nrow(data)
   
@@ -105,9 +104,8 @@ aipw_kernel_weights <- function(data, Tr, y, confounder_names, degree1, degree2,
   params <- list(Presolve=2,OutputFlag=0,QCPDual=0)
   
   res <- quadprog::solve.QP(Dmat = Dmat, dvec = dvec, Amat = Amat, bvec = bvec, meq = meq)
-  
-  phi0 <- (1-data[[Tr]])*res$solution*(data[[y]] - p0) + p0
-  phi1 <- (data[[Tr]])*res$solution*(data[[y]] - p1) + p1
+  phi0 <- (1-data[[Tr]])*res$solution*(data[[Y]] - p0) + p0
+  phi1 <- (data[[Tr]])*res$solution*(data[[Y]] - p1) + p1
   
   return(list(phi1 = phi1, phi0 = phi0))
   
