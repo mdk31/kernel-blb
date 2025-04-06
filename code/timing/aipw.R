@@ -99,7 +99,8 @@ if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
       set.seed(rp)
       dat <- kangschafer3(n = n, te = te, sigma = sigma, beta_overlap = 0.5)
       timing <- system.time({
-        causal_blb_aipw(data = dat, b = b, subsets = subsets, degree1, degree2, k1, k2, operator, penal)
+        causal_blb_aipw(data = dat, y = 'y', Tr = 'Tr', confounders = c('X1', 'X2'),
+                        b = b, subsets = subsets, degree1, degree2, k1, k2, operator, penal)
       })
       return(data.table(time_elapsed = timing['elapsed']))
     }, cl = 1)
