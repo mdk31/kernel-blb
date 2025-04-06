@@ -44,9 +44,9 @@ grid_vals <- as.data.table(expand.grid(n = n_values))
 seq_row <- seq_len(nrow(grid_vals))
 
 if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
-  cblb <- readRDS(file.path(temp_dir, 'full_bootstrap.rds'))
+  full <- readRDS(file.path(temp_dir, 'full_bootstrap.rds'))
 } else{
-  cblb <- lapply(seq_row, function(i){
+  full <- lapply(seq_row, function(i){
     grid_val <- grid_vals[i]
     n <- grid_val$n
 
@@ -73,8 +73,8 @@ if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
     out[, `:=`(n = n)]
     out
   })
-  cblb <- rbindlist(cblb)
-  saveRDS(cblb, file.path(temp_dir, 'full_bootstrap.rds'))
+  full <- rbindlist(full)
+  saveRDS(full, file.path(temp_dir, 'full_bootstrap.rds'))
 }
 
 
@@ -110,3 +110,5 @@ if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
   cblb <- rbindlist(cblb)
   saveRDS(cblb, file.path(temp_dir, 'cblb_bootstrap.rds'))
 }
+
+box_plots(full, cblb, 'aipw', img_tmp_dir)
