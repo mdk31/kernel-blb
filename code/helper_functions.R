@@ -657,27 +657,28 @@ truncate_to_n <- function(number, n) {
   return(truncated)
 }
 
-zip_plots <- function(data, zip_labels, n, use_case, image_path, plot_title, te, 
-                      subsets = NULL, gamma = NULL, text_x = 0.75, text_y = 50){
-  assertthat::assert_that(!((is.null((subsets) & !is.null(gamma)) | (!is.null(subsets) & is.null(gamma)))))
+zip_plots <- function(data, zip_labels, n, use_case, image_path, plot_title, te,
+                      type = 'full', text_x = 0.75, text_y = 50){
   if(data.table::is.data.table(data) == FALSE){
     data <- data.table::as.data.table(data)
   }
 
   nm_prefix <- paste0(use_case, '_zip_plot_n', n)
-  if(is.null(subsets)){
-    nm <- paste0(nm_prefix, '_full.pdf')
-    title <- bquote(paste(plot_title, ' ', n == .(n)))
-    ggsub <- data[n == n]
-    label_sub <- zip_labels[n == n]
-    
-  } else{
-    nm <- paste0(nm_prefix, '_subset_', subsets, '_gamma_', gamma, '_cblb.pdf')
-    title <- bquote(paste(.(plot_title), ' ', s == .(subsets), ' and ', gamma == .(gamma), ' and ', n == .(n)))
-    ggsub <- data[n == n & subsets == subsets & gamma == gamma]
-    label_sub <- zip_labels[n == n & subsets == subsets & gamma == gamma]
-  }
-  
+  ggsub <- data[n == n]
+  label_sub <- zip_labels[n == n]
+  # if(type == 'full'){
+  #   nm <- paste0(nm_prefix, '_full.pdf')
+  #   title <- bquote(paste(plot_title, ' ', n == .(n)))
+  #   ggsub <- data[n == n]
+  #   label_sub <- zip_labels[n == n]
+  #   
+  # } else{
+  #   nm <- paste0(nm_prefix, '_subset_', subsets, '_gamma_', gamma, '_cblb.pdf')
+  #   title <- bquote(paste(.(plot_title), ' ', s == .(subsets), ' and ', gamma == .(gamma), ' and ', n == .(n)))
+  #   ggsub <- data[n == n & subsets == subsets & gamma == gamma]
+  #   label_sub <- zip_labels[n == n & subsets == subsets & gamma == gamma]
+  # }
+  nm <- paste0(nm_prefix, '_', type, '.pdf')
   p <- ggplot2::ggplot(ggsub, ggplot2::aes(y = rank)) +
     ggplot2::geom_segment(ggplot2::aes(x = lower_ci, y = rank, xend = upper_ci, yend = rank, color = covered)) +
     ggplot2::geom_vline(ggplot2::aes(xintercept = te), color = 'yellow', size = 0.5, linetype = 'dashed') +
@@ -689,7 +690,7 @@ zip_plots <- function(data, zip_labels, n, use_case, image_path, plot_title, te,
     ggplot2::geom_text(x = text_x, y = text_y, ggplot2::aes(label = perc_cover), data = label_sub, size = 4) +
     ggplot2::ggtitle(title)
   
-  if(is.null(subsets)){
+  if(type == 'full'){
     p <- p + ggplot2::facet_grid(n ~ ., labeller = ggplot2::label_both)
   } else{
     p <- p + ggplot2::facet_grid(n ~ subsets, labeller = ggplot2::label_both)
