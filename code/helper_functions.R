@@ -147,9 +147,9 @@ box_plots <- function(full, cblb, use_case, image_dir){
   cblb[, `:=`(type = paste0('cBLB, subsets = ', subsets, ', gamma = ', gamma))]
   cblb[, `:=`(subsets = NULL, gamma = NULL)]
   timing_df <- data.table::rbindlist((list(cblb, full)))
-  filename <- paste0(filename, ".pdf")
+  filename <- paste0(use_case, ".pdf")
   
-  p <- ggplot2::ggplot(timing_df, ggplot2::aes_string(x = type, y = time_elapsed)) +
+  p <- ggplot2::ggplot(timing_df, ggplot2::aes(x = type, y = time_elapsed)) +
     ggplot2::geom_boxplot() +
     ggplot2::labs(
       title = "Timing Results by Method",
@@ -159,7 +159,7 @@ box_plots <- function(full, cblb, use_case, image_dir){
     ggplot2::theme_minimal() +
     ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1))
   
-  ggplot2::ggsave(filename = path.expand(image_dir, filename), plot = p, width = 8, height = 6)
+  ggplot2::ggsave(filename = file.path(image_dir, filename), plot = p, width = 8, height = 6)
 }
 
 calculate_gamma <- function(n, subsets){
