@@ -32,9 +32,9 @@ grid_vals <- as.data.table(expand.grid(n = n_values))
 seq_row <- seq_len(nrow(grid_vals))
 
 if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
-  cblb <- readRDS(file.path(temp_dir, 'full_bootstrap.rds'))
+  full <- readRDS(file.path(temp_dir, 'full_bootstrap.rds'))
 } else{
-  cblb <- lapply(seq_row, function(i){
+  full <- lapply(seq_row, function(i){
     grid_val <- grid_vals[i]
     n <- grid_val$n
 
@@ -60,8 +60,8 @@ if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
     out[, `:=`(n = n)]
     out
   })
-  cblb <- rbindlist(cblb)
-  saveRDS(cblb, file.path(temp_dir, 'full_bootstrap.rds'))
+  full <- rbindlist(full)
+  saveRDS(full, file.path(temp_dir, 'full_bootstrap.rds'))
 }
 
 # cBLB SIMULATIONS----
@@ -78,18 +78,19 @@ if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
     n <- grid_val$n
     subsets <- grid_val$subsets
     gamma <- grid_val$gamma
-    b <- round(n^gamma)
+    b <- floor(n^gamma)
     
     out <- lapply(seq_len(replications), function(rp){
       set.seed(rp)
       dat <- kangschafer3(n = n, te = te, sigma = sigma, beta_overlap = 0.5)
       time <- system.time({
-        causal_blb(data = dat, b = b, subsets = subsets)
+        causal_blb(data = dat, y = 'y', Tr = 'Tr', confounders = c('X1', 'X2'),
+                   b = b, subsets = subsets)
       })
       return(data.table(time_elapsed = time['elapsed']))
     })
     out <- rbindlist(out)
-    out[, `:=`(n = n)]
+    out[, `:=`(n = n, gamma = gamma, subsets = subsets)]
     out
   })
   cblb <- rbindlist(cblb)
