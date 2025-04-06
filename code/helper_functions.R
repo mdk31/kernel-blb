@@ -144,17 +144,22 @@ aol_loss <- function(params, X, A, r_tilde, K_matrix, lambda) {
 
 box_plots <- function(full, cblb){
   full[, `:=`(type = 'Full Bootstrap')]
-  cblb[, `:=`(type = paste0())]
+  cblb[, `:=`(type = paste0('cBLB, subsets = ', subsets, ', gamma = ', gamma))]
+  cblb[, `:=`(subsets = NULL, gamma = NULL)]
+  timing_df <- data.table::rbindlist((list(cblb, full)))
   
   
-  ggplot2::ggplot(timing_df, ggplot2::aes_string(x = method_col, y = time_col)) +
+  p <- ggplot2::ggplot(timing_df, ggplot2::aes_string(x = type, y = time_elapsed)) +
     ggplot2::geom_boxplot() +
     ggplot2::labs(
       title = "Timing Results by Method",
       x = "Method",
       y = "Execution Time"
     ) +
-    ggplot2::theme_minimal()
+    ggplot2::theme_minimal() +
+    ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1))
+  
+  ggplot2::ggsave(filename = paste0(filename, ".pdf"), plot = p, width = 8, height = 6)
 }
 
 calculate_gamma <- function(n, subsets){
