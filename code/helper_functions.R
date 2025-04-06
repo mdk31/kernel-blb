@@ -1,8 +1,12 @@
 aipw_kernel_weights <- function(data, Tr, y, confounder_names, degree1, degree2, k1, k2, operator, penal, bootstrap_size=length(data)){
   
+  if(data.table::is.data.table(data) == FALSE){
+    data <- data.table::as.data.table(data)
+  }
+  
   intervention <- data[[Tr]]
   outcome <- data[[y]]
-  confounders <- data[confounder_names]
+  confounders <- data[..confounder_names]
   n <- nrow(data)
   
   t1 <- as.integer(intervention)

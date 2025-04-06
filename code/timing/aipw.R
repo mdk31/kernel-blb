@@ -54,7 +54,8 @@ if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
       set.seed(rp)
       dat <- kangschafer3(n = n, te = te, sigma = sigma, beta_overlap = 0.5)
       timing <- system.time({
-        output <- aipw_kernel_weights(dat,degree1,degree2,k1,k2,operator,penal)
+        output <- aipw_kernel_weights(dat, Tr = 'Tr', y = 'y', confounder_names = c('X1', 'X2'),
+                                      degree1,degree2,k1,k2,operator,penal)
         phi1 <- output$phi1
         phi0 <- output$phi0
         M <- rmultinom(n = B, size = n, prob = rep(1, n))
