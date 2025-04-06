@@ -59,7 +59,7 @@ if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
                             se = mean(boot_reps)))
     }, cl = 4)
     out <- rbindlist(out)
-    out[, `:=`(n = n)]
+    out[, `:=`(n = n, subsets = subsets, gamma = gamma)]
     out
   })
   cblb <- rbindlist(cblb)
@@ -105,7 +105,7 @@ for(idx in seq_len(nrow(grid_vals))){
   n <- grid_row$n
   subsets <- grid_row$subsets
   gamma <- grid_row$gamma
-  zip_plots(data = zip_plot_obj$zip, zip_labels = zip_plot_obj$zip_labels, n = n, subsets = subsets, 
-            gamma = gamma, use_case = 'dml', plot_title = 'DML SVM', te = te, image_path = img_tmp_dir, text_x = 0.89)
+  zip_plots(data = zip_plot_obj$zip, zip_labels = zip_plot_obj$zip_labels, n = n, 
+            type = 'cblb', use_case = 'dml', plot_title = 'DML SVM', 
+            te = te, image_path = img_tmp_dir, text_x = 0.89)
 }
-

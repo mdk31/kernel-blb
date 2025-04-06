@@ -42,7 +42,8 @@ if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
       set.seed(rp)
       dat <- kangschafer3(n = n, te = te, sigma = sigma, beta_overlap = 0.5)
       timing <- system.time({
-        crossfit <- crossfit_estimator(dat, K = K)
+        crossfit <- crossfit_estimator(dat, y = 'y', Tr = 'Tr', confounders = c('X1', 'X2'),
+                                       K = K)
         M <- rmultinom(n = B, size = n, prob = rep(1, n))
         
         boot_reps <- sapply(seq_len(B), function(bt){

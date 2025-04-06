@@ -142,6 +142,21 @@ aol_loss <- function(params, X, A, r_tilde, K_matrix, lambda) {
   return(loss_term + reg_term)
 }
 
+box_plots <- function(full, cblb){
+  full[, `:=`(type = 'Full Bootstrap')]
+  cblb[, `:=`(type = paste0())]
+  
+  
+  ggplot2::ggplot(timing_df, ggplot2::aes_string(x = method_col, y = time_col)) +
+    ggplot2::geom_boxplot() +
+    ggplot2::labs(
+      title = "Timing Results by Method",
+      x = "Method",
+      y = "Execution Time"
+    ) +
+    ggplot2::theme_minimal()
+}
+
 calculate_gamma <- function(n, subsets){
   soln <- 1 - log(subsets)/log(n)
   return(truncate_to_n(soln, 5))
