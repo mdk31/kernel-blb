@@ -4,7 +4,7 @@ source('code/helper_functions.R')
 
 te <- 0.8
 sigma <- 1
-replications <- 20
+replications <- 25
 K <- 10
 B <- 100 #bootstrap resamples
 

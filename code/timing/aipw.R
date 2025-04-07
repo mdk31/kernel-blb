@@ -6,7 +6,7 @@ source('code/helper_functions.R')
 
 te <- 0.8
 sigma <- 1
-replications <- 1000
+replications <- 25
 B <- 100 #bootstrap resamples
 
 # Kernel specific parts
@@ -106,7 +106,7 @@ if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
     }, cl = 1)
     
     out <- rbindlist(out)
-    out[, `:=`(n = n)]
+    out[, `:=`(n = n, subsets = subsets, gamma = gamma)]
     out
   })
   cblb <- rbindlist(cblb)
