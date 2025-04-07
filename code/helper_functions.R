@@ -180,7 +180,7 @@ causal_blb <- function(data, y, Tr, confounders, b, subsets, disjoint = TRUE, K 
   blb_out <- lapply(partitions, function(i){
     tmp_dat <- data[i]
     folds <- split(idx, sample(rep(1:K, length.out = length(idx))))
-    crossfit <- crossfit_estimator(data = tmp_dat, Y = y, Tr = Tr, confounders = confounders,
+    crossfit <- crossfit_estimator(data = tmp_dat, y = y, Tr = Tr, confounders = confounders,
                                    K = K)
 
     M <- rmultinom(n = B, size = n, prob = rep(1, b))
