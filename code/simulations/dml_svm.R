@@ -51,10 +51,10 @@ if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
       return(causal_blb(data = dat, y = 'y', Tr = 'Tr', confounders = c('X1', 'X2'),
                         b = b, subsets = subsets))
       
-    }, cl = 1)
+    }, cl = 4)
     
     out <- rbindlist(out)
-    out[, `:=`(n = n)]
+    out[, `:=`(n = n, subsets = subsets, gamma = gamma)]
     out
   })
   cblb <- rbindlist(cblb)

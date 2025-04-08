@@ -36,47 +36,8 @@ if(!file.exists(img_tmp_dir)){
 }
 
 # Values for simulations
-n_values <- c(10000)
+n_values <- c(5000)
 subset_values <- c(5, 10, 15)
-
-# # FULL SIMULATIONS----
-# grid_vals <- as.data.table(expand.grid(n = n_values))
-# seq_row <- seq_len(nrow(grid_vals))
-# 
-# if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
-#   cblb <- readRDS(file.path(temp_dir, 'full_bootstrap.rds'))
-# } else{
-#   cblb <- lapply(seq_row, function(i){
-#     grid_val <- grid_vals[i]
-#     n <- grid_val$n
-# 
-#     out <- pblapply(seq_len(replications), function(rp){
-#       set.seed(rp)
-#       dat <- kangschafer3(n = n, te = te, sigma = sigma, beta_overlap = 0.5)
-#       output <- aipw_kernel_weights(dat,degree1,degree2,k1,k2,operator,penal)
-#       phi1 <- output$phi1
-#       phi0 <- output$phi0
-#       M <- rmultinom(n = B, size = n, prob = rep(1, n))
-#       boot_reps <- sapply(seq_len(B), function(bt){
-#         boot_phi1 <- M[, bt]*phi1
-#         boot_phi0 <- M[, bt]*phi0
-#         mean(boot_phi1) - mean(boot_phi0)
-#       })
-#       
-#       perc_ci <- boot:::perc.ci(boot_reps)
-#       return(data.table(lower_ci = perc_ci[4],
-#                         upper_ci = perc_ci[5],
-#                         estim = mean(boot_reps),
-#                         se = sd(boot_reps)))
-#     }, cl = 1)
-#     out <- rbindlist(out)
-#     out[, `:=`(n = n)]
-#     out
-#   })
-#   cblb <- rbindlist(cblb)
-#   saveRDS(cblb, file.path(temp_dir, 'full_bootstrap.rds'))
-# }
-# 
 
 # cBLB SIMULATIONS----
 grid_vals <- as.data.table(expand.grid(n = n_values,
@@ -97,7 +58,8 @@ if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
     out <- pblapply(seq_len(replications), function(rp){
       set.seed(rp)
       dat <- kangschafer3(n = n, te = te, sigma = sigma, beta_overlap = 0.5)
-      return(causal_blb_aipw(data = dat, b = b, subsets = subsets, degree1, degree2, k1, k2, operator, penal))
+      return(causal_blb_aipw(data = dat, y = 'y', Tr = 'Tr', confounders = c('X1', 'X2'),
+                             b = b, subsets = subsets, degree1, degree2, k1, k2, operator, penal))
     }, cl = 1)
     
     out <- rbindlist(out)
@@ -108,4 +70,13 @@ if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
   saveRDS(cblb, file.path(temp_dir, 'cblb_bootstrap.rds'))
 }
 
-output <- zip_plots_helper(data = cblb, type = 'blb')
+zip_plot_obj <- zip_plots_helper(data = cblb, type = 'blb', te = te)
+for(idx in seq_len(nrow(grid_vals))){
+  grid_row <- grid_vals[idx, ]
+  n <- grid_row$n
+  subsets <- grid_row$subsets
+  gamma <- grid_row$gamma
+  zip_plots(data = zip_plot_obj$zip, zip_labels = zip_plot_obj$zip_labels, n = n, 
+            type = 'cblb', use_case = 'aipw', plot_title = 'AIPW', 
+            te = te, image_path = img_tmp_dir, text_x = 0.89)
+}
