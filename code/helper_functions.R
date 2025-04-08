@@ -156,7 +156,7 @@ box_plots <- function(full, cblb, use_case, image_dir){
     ggplot2::labs(
       title = "Timing Results by Method",
       x = "Method",
-      y = "Execution Time"
+      y = "Execution Time (seconds)"
     ) +
     ggplot2::theme_minimal() +
     ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1))
