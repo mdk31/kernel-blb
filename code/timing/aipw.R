@@ -113,4 +113,4 @@ if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
   saveRDS(cblb, file.path(temp_dir, 'cblb_bootstrap.rds'))
 }
 
-box_plots(full, cblb, 'aipw', img_tmp_dir)
+box_plots(full, cblb, 'aipw', title = 'AIPW', img_tmp_dir)

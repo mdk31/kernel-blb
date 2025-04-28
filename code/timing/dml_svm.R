@@ -97,4 +97,4 @@ if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
   saveRDS(cblb, file.path(temp_dir, 'cblb_bootstrap.rds'))
 }
 
-box_plots(full, cblb, 'dml_svm', img_tmp_dir)
+box_plots(full, cblb, 'dml_svm', title = 'double ML', img_tmp_dir)

@@ -144,7 +144,7 @@ aol_loss <- function(params, X, A, r_tilde, K_matrix, lambda) {
   return(loss_term + reg_term)
 }
 
-box_plots <- function(full, cblb, use_case, image_dir){
+box_plots <- function(full, cblb, use_case, title, image_dir){
   full[, `:=`(type = 'Full Bootstrap')]
   cblb[, `:=`(type = paste0('cBLB, subsets = ', subsets, ', gamma = ', gamma))]
   cblb[, `:=`(subsets = NULL, gamma = NULL)]
@@ -154,7 +154,7 @@ box_plots <- function(full, cblb, use_case, image_dir){
   p <- ggplot2::ggplot(timing_df, ggplot2::aes(x = type, y = time_elapsed)) +
     ggplot2::geom_boxplot() +
     ggplot2::labs(
-      title = "Timing Results by Method",
+      title = paste0("Timing Results by Method, ", title),
       x = "Method",
       y = "Execution Time (seconds)"
     ) +
@@ -185,8 +185,8 @@ causal_blb <- function(data, y, Tr, confounders, b, subsets, disjoint = TRUE, K 
 
     M <- rmultinom(n = B, size = n, prob = rep(1, b))
     blb_reps <- sapply(seq_len(B), function(bt){
-      phi1 <- M[, bt]*((crossfit$Tr/crossfit$prop_score)*(crossfit$y - crossfit$m1) + crossfit$m1)
-      phi0 <- M[, bt]*((1 - crossfit$Tr)/(1 - crossfit$prop_score)*(crossfit$y - crossfit$m0) + crossfit$m0)
+      phi1 <- M[, bt]*((crossfit[[Tr]]/crossfit$prop_score)*(crossfit[[y]] - crossfit$m1) + crossfit$m1)
+      phi0 <- M[, bt]*((1 - crossfit[[Tr]])/(1 - crossfit$prop_score)*(crossfit[[y]] - crossfit$m0) + crossfit$m0)
       sum(phi1)/n - sum(phi0)/n
     })
     
@@ -347,7 +347,7 @@ crossfit_estimator <- function(data, y, Tr, confounders, K = 10){
   fold_idx <- seq_len(nrow(data))
   folds <- split(fold_idx, sample(rep(1:K, length.out = length(fold_idx))))
   
-  m_formula <- as.formula(paste0(y, ' ~ Tr + ', paste(confounders, collapse = ' + ')))
+  m_formula <- as.formula(paste0(y, ' ~ ', Tr, ' + ', paste(confounders, collapse = ' + ')))
   g_formula <- as.formula(paste0(Tr, ' ~ ', paste(confounders, collapse = ' + ')))
   
   crossfit_dt <- lapply(folds, function(test_idx){
