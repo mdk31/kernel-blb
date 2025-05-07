@@ -8,8 +8,7 @@ te <- 0.8
 sigma <- 1
 replications <- 1000
 B <- 100 #bootstrap resamples
-optimal_val <- 1.001 #extracted from PAPER
-
+optimal_val <- 1.001 
 
 base_nm <- 'optimal_policy'
 image_path <- 'images'

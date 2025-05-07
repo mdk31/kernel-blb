@@ -71,6 +71,47 @@ if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
   saveRDS(full, file.path(temp_dir, 'full_bootstrap.rds'))
 }
 
+# SCALING SIMULATIONS
+grid_vals <- as.data.table(expand.grid(n = 500, 1000))
+seq_row <- seq_len(nrow(grid_vals))
+
+if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
+  scaling <- readRDS(file.path(temp_dir, 'full_bootstrap.rds'))
+} else{
+  scaling <- lapply(seq_row, function(i){
+    grid_val <- grid_vals[i]
+    n <- grid_val$n
+    
+    out <- pblapply(seq_len(replications), function(rp){
+      set.seed(rp)
+      dat <- aol_dgp(n = n)
+      lambda <- 0.01
+      initial_params <- c(rep(0, n), 0)  # Initial v and b
+      timing <- system.time({
+        estim_opt_regime <- estimate_optimal_regime(data = dat, 
+                                                    r_tilde_form = y ~ x1 + x2 + x3 + x4 + x5 + A + A:x1 + A:x2, 
+                                                    covariates = c('x1', 'x2', 'x3', 'x4', 'x5'), 
+                                                    A = 'A', y = 'y', 
+                                                    initial_params = initial_params, 
+                                                    lambda = lambda)
+        M <- rmultinom(n = B, size = n, prob = rep(1, n))
+        
+        boot_reps <- sapply(seq_len(B), function(bt){
+          sum(M[, bt]*dat$y/0.5*(dat$A == estim_opt_regime))/n
+        })
+        
+        perc_ci <- boot:::perc.ci(boot_reps)
+      })
+      
+      return(data.table(time_elapsed = timing['elapsed']))
+    }, cl = 1)
+    out <- rbindlist(out)
+    out[, `:=`(n = n)]
+    out
+  })
+  scaling <- rbindlist(scaling)
+  saveRDS(scaling, file.path(temp_dir, 'scaling_bootstrap.rds'))
+}
 
 # cBLB SIMULATIONS----
 grid_vals <- as.data.table(expand.grid(n = n_values,
