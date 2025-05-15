@@ -38,7 +38,7 @@ if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
     grid_val <- grid_vals[i]
     n <- grid_val$n
 
-    out <- lapply(seq_len(replications), function(rp){
+    out <- pbapply::pblapply(seq_len(replications), function(rp){
       set.seed(rp)
       dat <- kangschafer3(n = n, te = te, sigma = sigma, beta_overlap = 0.5)
       timing <- system.time({
@@ -55,7 +55,7 @@ if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
         boot_ci <- boot:::perc.ci((boot_reps))
       })
       return(data.table(time_elapsed = timing['elapsed']))
-    })
+    }, cl = 1)
     out <- rbindlist(out)
     out[, `:=`(n = n)]
     out
@@ -64,6 +64,42 @@ if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
   saveRDS(full, file.path(temp_dir, 'full_bootstrap.rds'))
 }
 
+# SCALING SIMULATIONS----
+grid_vals <- as.data.table(expand.grid(n = c(1000, 2000)))
+seq_row <- seq_len(nrow(grid_vals))
+
+if(file.exists(file.path(temp_dir, 'scaling_bootstrap.rds'))){
+  scaling <- readRDS(file.path(temp_dir, 'scaling_bootstrap.rds'))
+} else{
+  scaling <- lapply(seq_row, function(i){
+    grid_val <- grid_vals[i]
+    n <- grid_val$n
+    
+    out <- pbapply::pblapply(seq_len(replications), function(rp){
+      set.seed(rp)
+      dat <- kangschafer3(n = n, te = te, sigma = sigma, beta_overlap = 0.5)
+      timing <- system.time({
+        crossfit <- crossfit_estimator(dat, y = 'y', Tr = 'Tr', confounders = c('X1', 'X2'),
+                                       K = K)
+        M <- rmultinom(n = B, size = n, prob = rep(1, n))
+        
+        boot_reps <- sapply(seq_len(B), function(bt){
+          phi1 <- M[, bt]*((crossfit$Tr/crossfit$prop_score)*(crossfit$y - crossfit$m1) + crossfit$m1)
+          phi0 <- M[, bt]*((1 - crossfit$Tr)/(1 - crossfit$prop_score)*(crossfit$y - crossfit$m0) + crossfit$m0)
+          sum(phi1)/n - sum(phi0)/n
+        })
+        
+        boot_ci <- boot:::perc.ci((boot_reps))
+      })
+      return(data.table(time_elapsed = timing['elapsed']))
+    }, cl = 1)
+    out <- rbindlist(out)
+    out[, `:=`(n = n)]
+    out
+  })
+  scaling <- rbindlist(scaling)
+  saveRDS(scaling, file.path(temp_dir, 'scaling_bootstrap.rds'))
+}
 # cBLB SIMULATIONS----
 grid_vals <- as.data.table(expand.grid(n = n_values,
                          subsets = subset_values))
@@ -80,7 +116,7 @@ if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
     gamma <- grid_val$gamma
     b <- floor(n^gamma)
     
-    out <- lapply(seq_len(replications), function(rp){
+    out <- pbapply::pblapply(seq_len(replications), function(rp){
       set.seed(rp)
       dat <- kangschafer3(n = n, te = te, sigma = sigma, beta_overlap = 0.5)
       time <- system.time({
@@ -88,7 +124,7 @@ if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
                    b = b, subsets = subsets)
       })
       return(data.table(time_elapsed = time['elapsed']))
-    })
+    }, cl = 1)
     out <- rbindlist(out)
     out[, `:=`(n = n, gamma = gamma, subsets = subsets)]
     out
@@ -97,4 +133,4 @@ if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
   saveRDS(cblb, file.path(temp_dir, 'cblb_bootstrap.rds'))
 }
 
-box_plots(full, cblb, 'dml_svm', title = 'double ML', img_tmp_dir)
+box_plots(full, cblb, 'dml_svm', title = 'DML', img_tmp_dir)

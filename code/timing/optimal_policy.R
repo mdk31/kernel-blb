@@ -72,11 +72,11 @@ if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
 }
 
 # SCALING SIMULATIONS
-grid_vals <- as.data.table(expand.grid(n = 500, 1000))
+grid_vals <- as.data.table(expand.grid(n = c(1000, 2000)))
 seq_row <- seq_len(nrow(grid_vals))
 
-if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
-  scaling <- readRDS(file.path(temp_dir, 'full_bootstrap.rds'))
+if(file.exists(file.path(temp_dir, 'scaling_bootstrap.rds'))){
+  scaling <- readRDS(file.path(temp_dir, 'scaling_bootstrap.rds'))
 } else{
   scaling <- lapply(seq_row, function(i){
     grid_val <- grid_vals[i]
@@ -155,3 +155,16 @@ if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
 
 box_plots(full, cblb, 'policy', title = 'AOL', img_tmp_dir)
 
+# one off scaling plot
+library(ggplot2)
+
+p <- ggplot(scaling, aes(x = factor(n), y = time_elapsed)) +
+  geom_boxplot() +
+  labs(
+    title = 'Full bootstrap, AOL, by n size',
+    x = "n",
+    y = "Execution Time (seconds)"
+  ) +
+  theme_minimal()
+  
+ggsave(filename = file.path(image_tmp_dir, 'policy_scaling.png'), plot = p, width = 8, height = 6)
