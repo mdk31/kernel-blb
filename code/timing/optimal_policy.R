@@ -167,4 +167,4 @@ p <- ggplot(scaling, aes(x = factor(n), y = time_elapsed)) +
   ) +
   theme_minimal()
   
-ggsave(filename = file.path(image_tmp_dir, 'policy_scaling.png'), plot = p, width = 8, height = 6)
+ggsave(filename = file.path(img_tmp_dir, 'policy_scaling.pdf'), plot = p, width = 8, height = 6)

@@ -44,7 +44,15 @@ aipw_kernel_weights <- function(data, Tr, Y, confounder_names, degree1, degree2,
                                  k1 = k1,
                                  k2 = k2,
                                  operator=operator),
-                              error=function(e) NULL)
+                              error=function(e) {print(e); NULL})
+  # shape
+  str(pyX1); str(pyY1)
+  
+  # NA / Inf
+  anyNA(pyX1); any(!is.finite(pyX1))
+  
+  # How many treated
+  table(data[[Tr]])
   
   #compute K
   matrix_eva <- as.matrix( confounders )
