@@ -59,8 +59,8 @@ operator <- "single"
 penal <- log(2)
 
 # Values for simulations
-n_values <- c(10*1e6)
-subset_values <- c(20000)
+n_values <- c(1.1*1e6)
+subset_values <- c(1467)
 
 # cBLB SIMULATIONS----
 grid_vals <- as.data.table(expand.grid(n = n_values,
@@ -77,8 +77,9 @@ cblb <- lapply(seq_row, function(i){
   
   out <- pblapply(seq_len(replications), function(rp){
     set.seed(rp)
-    dat <- kangschafer3(n = n, te = te, sigma = sigma, beta_overlap = 0.5)
-    return(causal_blb_aipw(data = dat, y = 'y', Tr = 'Tr', confounders = c('X1', 'X2'),
+    dat <- kangschafer3_test(n = n, te = te, sigma = sigma, beta_overlap = 0.5)
+    return(causal_blb_aipw(data = dat, y = 'y', Tr = 'Tr', 
+                           confounders = c('X1', 'X2', 'X3', 'X4', 'X5', 'X6', 'X7', 'X8', 'X9', 'X10'),
                            b = b, subsets = subsets, degree1, degree2, k1, k2, operator, penal))
   }, cl = 1)
   
