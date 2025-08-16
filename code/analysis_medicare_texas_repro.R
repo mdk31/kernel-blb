@@ -7,7 +7,7 @@ library(fst)
 library(dplyr)
 
 # DGP
-synth_tx_dataset <- function(n, seed = 123) {
+synth_tx_dataset <- function(n, seed = 123, pm_threshold = 10, treat_beta = 0.20) {
   stopifnot(n > 0)
   set.seed(seed)
   
@@ -143,9 +143,27 @@ source('code/helper_functions.R')
 source('code/scale_function.R')
 
 # Kernel specific parts
+virtualenv_remove("r-reticulate", confirm = TRUE)
+
+# 1) Recreate and activate
+virtualenv_create("r-reticulate", python = Sys.which("python3"))
 use_virtualenv("r-reticulate", required = TRUE)
-#py_install("numpy<2.0")
-#py_install("scikit-learn")
+
+# 2) Tools first
+py_install(c("pip==24.2","setuptools","wheel"), pip = TRUE, upgrade = TRUE)
+
+# 3) Install a consistent NumPy-1.26 stack
+py_install(c(
+  "numpy==1.26.4",          # ABI the error expects
+  "scipy==1.10.1",          # last SciPy fully happy with 1.26
+  "scikit-learn==1.4.2",    # works with py3.9 + numpy 1.26
+  "pandas==2.0.3",
+  "joblib", "threadpoolctl"
+), pip = TRUE, upgrade = TRUE)
+
+# 4) Sanity check
+py_run_string("import numpy, scipy, sklearn; print(numpy.__version__, scipy.__version__, sklearn.__version__)")
+py_config()
 np <- import("numpy")
 source_python("code/gp_simu_gate.py")
 
@@ -196,7 +214,7 @@ prop.table(table(TX_data_standardized$treat))
 # }
 
 # Shuffle the balanced dataset
-TX_data_standardized_balanced <- TX_data_standardized_balanced[sample(nrow(TX_data_standardized_balanced)), ]
+TX_data_standardized_balanced <- TX_data_standardized[sample(nrow(TX_data_standardized)), ]
 
 # Check new balance
 table(TX_data_standardized_balanced$treat)
@@ -210,7 +228,7 @@ k1 <- "poly"
 k2 <- "poly"
 operator <- "single"
 penal <- log(2)
-subsets <- 10
+subsets <- 1000
 gamma <- calculate_gamma(nrow(TX_data_standardized_balanced), subsets)
 b <- floor(nrow(TX_data_standardized_balanced)^gamma)
 B <- 100
