@@ -84,17 +84,18 @@ synth_tx_dataset <- function(n, seed = 123) {
                            sd   = 3.5, lo = 18, hi = 48)
   
   # treatment: PM2.5 (µg/m^3) ------------------------------------------
-  pm25_12 <- 8.0 +
+  pm25_star <- 8.0 +
     1.0*scale(popdensity)[,1] +
     0.5*scale(winter_rmax)[,1] -
     0.3*scale(summer_tmmx)[,1] +
     0.2*scale(poverty)[,1] +
     rnorm(n, 0, 0.9)
-  pm25_12 <- pmin(pmax(pm25_12, 3.0), 18.0)
+  pm25_star <- pmin(pmax(pm25_star, 3.0), 18.0)
+  pm25_12   <- as.integer(pm25_star >= pm_threshold)  # 1 = high exposure
   
   # outcome: death within 5 years (binary) ------------------------------
   male <- sex
-  linpred <- -11.0 +
+  linpred <- -9.0 +
     0.095*(age - 75) +
     0.35*male +
     0.60*dual +
