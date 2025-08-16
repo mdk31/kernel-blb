@@ -143,7 +143,7 @@ source('code/helper_functions.R')
 source('code/scale_function.R')
 
 # Kernel specific parts
-virtualenv_remove("r-reticulate", confirm = TRUE)
+virtualenv_remove("r-reticulate", confirm = FALSE)
 
 # 1) Recreate and activate
 virtualenv_create("r-reticulate", python = Sys.which("python3"))
@@ -161,7 +161,6 @@ py_install(c(
   "joblib", "threadpoolctl"
 ), pip = TRUE, upgrade = TRUE)
 
-# 4) Sanity check
 py_run_string("import numpy, scipy, sklearn; print(numpy.__version__, scipy.__version__, sklearn.__version__)")
 py_config()
 np <- import("numpy")
@@ -228,7 +227,7 @@ k1 <- "poly"
 k2 <- "poly"
 operator <- "single"
 penal <- log(2)
-subsets <- 3
+subsets <- 100
 gamma <- calculate_gamma(nrow(TX_data_standardized_balanced), subsets)
 b <- floor(nrow(TX_data_standardized_balanced)^gamma)
 B <- 100
