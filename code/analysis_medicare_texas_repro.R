@@ -5,8 +5,144 @@ library(data.table)
 library(devtools)
 library(fst)
 library(tidyverse)
-library(MatchIt)
-library(cobalt)
+
+# DGP
+# Synthetic Texas-like dataset generator ---------------------------------------
+# Produces columns:
+# pm25_12, dead_in_5, sex, race, age, dual, mean_bmi, smoke_rate, hispanic,
+# pct_blk, medhouseholdincome, medianhousevalue, poverty, education, popdensity,
+# pct_owner_occ, summer_tmmx, winter_tmmx, summer_rmax, winter_rmax
+
+synth_tx_dataset <- function(n, seed = 123) {
+  stopifnot(n > 0)
+  set.seed(seed)
+  
+  # helper ---------------------------------------------------------------
+  clamp01 <- function(x) pmin(pmax(x, 0), 1)
+  rlnorm_tuned <- function(n, meanlog, sdlog, min_val = NULL, max_val = NULL) {
+    x <- rlnorm(n, meanlog = meanlog, sdlog = sdlog)
+    if (!is.null(min_val)) x[x < min_val] <- min_val
+    if (!is.null(max_val)) x[x > max_val] <- max_val
+    x
+  }
+  rtruncnorm <- function(n, mean, sd, lo, hi) {
+    x <- rnorm(n, mean, sd)
+    x <- pmin(pmax(x, lo), hi)
+    x
+  }
+  
+  # latent drivers -------------------------------------------------------
+  # Urbanicity / density, socioeconomics, climate heterogeneity
+  z_pop    <- rnorm(n, 0, 1)   # higher -> more urban
+  z_pov    <- rnorm(n, 0, 1)   # higher -> poorer
+  z_clim   <- rnorm(n, 0, 1)   # east/west & gulf gradients
+  
+  # demographics ---------------------------------------------------------
+  sex  <- rbinom(n, 1, 0.45)  # 1 = male, 0 = female
+  # Race: 1 White, 2 Black, 3 Other (TX has separate hispanic share below)
+  race <- sample.int(3, n, replace = TRUE, prob = c(0.70, 0.12, 0.18))
+  
+  age  <- rtruncnorm(n, mean = 76, sd = 7, lo = 65, hi = 99)
+  
+  # population density (persons/km^2), strictly > 0
+  popdensity <- rlnorm_tuned(n,
+                             meanlog = log(400) - 0.5^2/2 + 0.6 * z_pop,
+                             sdlog   = 0.9,
+                             min_val = 1)  # never 0 (your code logs this)
+  
+  # climate --------------------------------------------------------------
+  # Max temperature in °C; rmax as % relative humidity
+  summer_tmmx <- rtruncnorm(n, mean = 35 + 1.5*z_clim - 0.5*z_pop, sd = 2.5, lo = 28, hi = 43)
+  winter_tmmx <- rtruncnorm(n, mean = 16 + 1.0*z_clim - 0.3*z_pop, sd = 3.0, lo = 5,  hi = 25)
+  summer_rmax <- rtruncnorm(n, mean = 62 + 6*z_clim - 2*z_pop, sd = 7, lo = 35, hi = 90)
+  winter_rmax <- rtruncnorm(n, mean = 68 + 5*z_clim - 1*z_pop, sd = 6, lo = 35, hi = 95)
+  
+  # socioeconomics -------------------------------------------------------
+  # pct_blk increases with urbanicity; hispanic higher overall in TX, mild urban tilt
+  pct_blk      <- clamp01(plogis(-1.2 + 0.8*z_pop + rnorm(n, 0, 0.5)))
+  hispanic     <- clamp01(plogis( 0.3 + 0.3*z_pop + rnorm(n, 0, 0.6))) # will be renamed pct_hispanic later
+  poverty      <- clamp01(plogis(-0.2 + 0.8*z_pov - 0.3*z_pop + rnorm(n, 0, 0.5)))
+  education    <- clamp01(plogis( 0.5 - 1.0*z_pov + 0.2*z_pop + rnorm(n, 0, 0.5))) # higher is more educated
+  pct_owner_occ<- clamp01(plogis( 0.8 - 0.9*z_pop - 0.5*z_pov + rnorm(n, 0, 0.5)))
+  
+  # income/house value (lognormal; increase with education & urbanicity)
+  medhouseholdincome <- rlnorm_tuned(
+    n,
+    meanlog = log(60000) - 0.35^2/2 + 0.25*education - 0.25*poverty + 0.2*z_pop + rnorm(n,0,0.05),
+    sdlog   = 0.35,
+    min_val = 25000, max_val = 160000
+  )
+  medianhousevalue <- rlnorm_tuned(
+    n,
+    meanlog = log(220000) - 0.45^2/2 + 0.25*education + 0.35*z_pop - 0.15*poverty + rnorm(n,0,0.06),
+    sdlog   = 0.45,
+    min_val = 50000, max_val = 800000
+  )
+  
+  dual <- rbinom(
+    n, 1,
+    clamp01(plogis(-0.5 + 1.1*poverty - 0.6*education - 0.2*z_pop + rnorm(n,0,0.4))))
+  
+  # health behaviors / clinical ----------------------------------------
+  smoke_rate <- clamp01(plogis(-0.6 + 0.9*poverty - 0.3*education - 0.1*z_pop + rnorm(n,0,0.5)))
+  mean_bmi   <- rtruncnorm(n,
+                           mean = 28.5 + 1.2*poverty - 0.6*education + 0.2*smoke_rate + rnorm(n,0,0.8),
+                           sd   = 3.5, lo = 18, hi = 48)
+  
+  # treatment: PM2.5 (µg/m^3) ------------------------------------------
+  pm25_12 <- 8.0 +
+    1.0*scale(popdensity)[,1] +
+    0.5*scale(winter_rmax)[,1] -
+    0.3*scale(summer_tmmx)[,1] +
+    0.2*scale(poverty)[,1] +
+    rnorm(n, 0, 0.9)
+  pm25_12 <- pmin(pmax(pm25_12, 3.0), 18.0)
+  
+  # outcome: death within 5 years (binary) ------------------------------
+  # Logit model with sensible effects; overall rate ~20–25%
+  male <- sex
+  linpred <- -9.0 +
+    0.095*(age - 75) +
+    0.35*male +
+    0.60*dual +
+    1.10*smoke_rate +
+    0.55*poverty +
+    0.03*(mean_bmi - 28) +
+    0.04*(pm25_12 - 8) +
+    0.15*pct_blk -
+    0.10*education +
+    rnorm(n, 0, 0.35)
+  
+  p_dead <- clamp01(plogis(linpred))
+  dead_in_5 <- rbinom(n, 1, p_dead)
+  
+  # assemble in your expected order -------------------------------------
+  out <- data.frame(
+    pm25_12 = as.numeric(pm25_12),
+    dead_in_5 = as.integer(dead_in_5),
+    sex = as.integer(sex),               # 0 = female, 1 = male
+    race = as.integer(race),             # 1 White, 2 Black, 3 Other
+    age = as.numeric(age),
+    dual = as.integer(dual),
+    mean_bmi = as.numeric(mean_bmi),
+    smoke_rate = as.numeric(smoke_rate),
+    hispanic = as.numeric(hispanic),     # your pipeline renames -> pct_hispanic
+    pct_blk = as.numeric(pct_blk),
+    medhouseholdincome = as.numeric(medhouseholdincome),
+    medianhousevalue = as.numeric(medianhousevalue),
+    poverty = as.numeric(poverty),
+    education = as.numeric(education),
+    popdensity = as.numeric(popdensity), # strictly > 0 (you log this next)
+    pct_owner_occ = as.numeric(pct_owner_occ),
+    summer_tmmx = as.numeric(summer_tmmx),
+    winter_tmmx = as.numeric(winter_tmmx),
+    summer_rmax = as.numeric(summer_rmax),
+    winter_rmax = as.numeric(winter_rmax)
+  )
+  
+  out
+}
+
 
 # Set Working Directory 
 source('code/helper_functions.R')
