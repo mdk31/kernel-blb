@@ -193,28 +193,28 @@ table(TX_data_standardized$treat)
 prop.table(table(TX_data_standardized$treat))
 
 # Downsample to balance the treatment variable
-# set.seed(123)  # for reproducibility
-# 
-# # Split data by treatment group
-# treat_0 <- TX_data_standardized[TX_data_standardized$treat == 0, ]
-# treat_1 <- TX_data_standardized[TX_data_standardized$treat == 1, ]
-# 
-# # Find the minority class size
-# min_size <- min(nrow(treat_0), nrow(treat_1))
-# 
-# # Randomly sample from the majority class to match minority class size
-# if (nrow(treat_0) > nrow(treat_1)) {
-#   # Downsample treat_0
-#   treat_0_balanced <- treat_0[sample(nrow(treat_0), min_size), ] 
-#   TX_data_standardized_balanced <- rbind(treat_0_balanced, treat_1)
-# } else {
-#   # Downsample treat_1
-#   treat_1_balanced <- treat_1[sample(nrow(treat_1), min_size), ]
-#   TX_data_standardized_balanced <- rbind(treat_0, treat_1_balanced)
-# }
+set.seed(123)  # for reproducibility
+
+# Split data by treatment group
+treat_0 <- TX_data_standardized[TX_data_standardized$treat == 0, ]
+treat_1 <- TX_data_standardized[TX_data_standardized$treat == 1, ]
+
+# Find the minority class size
+min_size <- min(nrow(treat_0), nrow(treat_1))
+
+# Randomly sample from the majority class to match minority class size
+if (nrow(treat_0) > nrow(treat_1)) {
+  # Downsample treat_0
+  treat_0_balanced <- treat_0[sample(nrow(treat_0), min_size), ]
+  TX_data_standardized_balanced <- rbind(treat_0_balanced, treat_1)
+} else {
+  # Downsample treat_1
+  treat_1_balanced <- treat_1[sample(nrow(treat_1), min_size), ]
+  TX_data_standardized_balanced <- rbind(treat_0, treat_1_balanced)
+}
 
 # Shuffle the balanced dataset
-TX_data_standardized_balanced <- TX_data_standardized[sample(nrow(TX_data_standardized)), ]
+TX_data_standardized_balanced <- TX_data_standardized_balanced[sample(nrow(TX_data_standardized_balanced)), ]
 
 # Check new balance
 table(TX_data_standardized_balanced$treat)
@@ -228,7 +228,7 @@ k1 <- "poly"
 k2 <- "poly"
 operator <- "single"
 penal <- log(2)
-subsets <- 1000
+subsets <- 3
 gamma <- calculate_gamma(nrow(TX_data_standardized_balanced), subsets)
 b <- floor(nrow(TX_data_standardized_balanced)^gamma)
 B <- 100
