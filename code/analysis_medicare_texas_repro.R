@@ -4,15 +4,9 @@ library(reticulate)
 library(data.table)
 library(devtools)
 library(fst)
-library(tidyverse)
+library(dplyr)
 
 # DGP
-# Synthetic Texas-like dataset generator ---------------------------------------
-# Produces columns:
-# pm25_12, dead_in_5, sex, race, age, dual, mean_bmi, smoke_rate, hispanic,
-# pct_blk, medhouseholdincome, medianhousevalue, poverty, education, popdensity,
-# pct_owner_occ, summer_tmmx, winter_tmmx, summer_rmax, winter_rmax
-
 synth_tx_dataset <- function(n, seed = 123) {
   stopifnot(n > 0)
   set.seed(seed)
@@ -99,9 +93,8 @@ synth_tx_dataset <- function(n, seed = 123) {
   pm25_12 <- pmin(pmax(pm25_12, 3.0), 18.0)
   
   # outcome: death within 5 years (binary) ------------------------------
-  # Logit model with sensible effects; overall rate ~20–25%
   male <- sex
-  linpred <- -9.0 +
+  linpred <- -11.0 +
     0.095*(age - 75) +
     0.35*male +
     0.60*dual +
@@ -146,7 +139,7 @@ synth_tx_dataset <- function(n, seed = 123) {
 
 # Set Working Directory 
 source('code/helper_functions.R')
-source('scale_function.R')
+source('code/scale_function.R')
 
 # Kernel specific parts
 use_virtualenv("r-reticulate", required = TRUE)
@@ -156,27 +149,10 @@ np <- import("numpy")
 source_python("code/gp_simu_gate.py")
 
 # Load Data
-aggregate_data <- as.data.frame(read_fst("/n/dominici_nsaph_l3/Lab/projects/fbargaglistoffi_casual_rule_ensamble/aggregate_medicare_data_2010to2016.fst"))
-
-
-# Filter for region of interest: Texas
-TX_data <- aggregate_data %>%
-  filter(statecode == "TX") %>%
-  filter(popdensity != 0)
+TX_data <- synth_tx_dataset(n = 1.1e6)
 
 # Texas Data
 dim(TX_data)
-
-# Select confounders and treatment
-TX_data <- TX_data %>%
-  select(pm25_12, dead_in_5, sex, race, age, dual,
-         mean_bmi, smoke_rate, hispanic, pct_blk,
-         medhouseholdincome, medianhousevalue, poverty, education, popdensity,
-         pct_owner_occ, summer_tmmx, winter_tmmx, summer_rmax, winter_rmax) %>%
-  rename(pct_hispanic = hispanic)
-
-# Perform log transformation on popdensity
-TX_data$popdensity <- log(TX_data$popdensity)
 
 # Extract data
 X <- TX_data %>% select(-dead_in_5, -pm25_12) 
