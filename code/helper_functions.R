@@ -1,4 +1,5 @@
-aipw_kernel_weights <- function(data, Tr, Y, confounder_names, degree1, degree2, k1, k2, operator, penal, bootstrap_size=length(data)){
+aipw_kernel_weights <- function(data, Tr, Y, confounder_names, degree1, degree2, k1, k2, operator, penal, bootstrap_size=length(data),
+                                estimator=ate_estimator){
   
   if(data.table::is.data.table(data) == FALSE){
     data <- data.table::as.data.table(data)
@@ -67,7 +68,8 @@ aipw_kernel_weights <- function(data, Tr, Y, confounder_names, degree1, degree2,
   p1 <- as.numeric(res.optim2_1$gpr$predict(matrix_eva))
   p0 <- as.numeric(res.optim2_0$gpr$predict(matrix_eva))
   
-  V <- rep(1/n,n)
+  est <- estimator(t1 = t1, n1 = n1, n = n)
+  V <- est$V
   
   #Quadratic part
   I1 <- diag( t1 )
@@ -116,10 +118,26 @@ aipw_kernel_weights <- function(data, Tr, Y, confounder_names, degree1, degree2,
   phi0 <- (1-data[[Tr]])*res$solution*(data[[Y]] - p0) + p0
   phi1 <- (data[[Tr]])*res$solution*(data[[Y]] - p1) + p1
   
-  return(list(phi1 = phi1, phi0 = phi0))
+  tau_hat <- est$aggregate(phi1 = phi1, phi0 = phi0, t1 = t1, n1 = n1, n = n)
+  
+  return(list(phi1 = phi1, phi0 = phi0, tau_hat = tau_hat))
   
   
   
+}
+
+ate_estimator <- function(t1, n1, n) {
+  list(
+    V = rep(1/n, n),                                 
+    aggregate = function(phi1, phi0, t1, n1, n) mean(phi1 - phi0)  # ATE
+  )
+}
+
+att_estimator <- function(t1, n1, n) {
+  list(
+    V = as.numeric(t1) / n1,                          
+    aggregate = function(phi1, phi0, t1, n1, n) sum((t1 / n1) * (phi1 - phi0))  # ATT
+  )
 }
 
 aol_dgp <- function(n){
