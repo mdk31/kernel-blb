@@ -1,4 +1,4 @@
-library(pbapply)
+# library(pbapply)
 library(reticulate)
 library(data.table)
 
@@ -68,24 +68,28 @@ grid_vals <- as.data.table(expand.grid(n = n_values,
 grid_vals[, `:=`(gamma = calculate_gamma(n, subsets))]
 seq_row <- seq_len(nrow(grid_vals))
 
-cblb <- lapply(seq_row, function(i){
-  grid_val <- grid_vals[i]
-  n <- grid_val$n
-  subsets <- grid_val$subsets
-  gamma <- grid_val$gamma
-  b <- floor(n^gamma)
-  
-  out <- pblapply(seq_len(replications), function(rp){
-    set.seed(rp)
-    dat <- kangschafer3_test(n = n, te = te, sigma = sigma, beta_overlap = 0.5)
-    return(causal_blb_aipw(data = dat, y = 'y', Tr = 'Tr', 
-                           confounders = c('X1', 'X2', 'X3', 'X4', 'X5', 'X6', 'X7', 'X8', 'X9', 'X10'),
-                           b = b, subsets = subsets, degree1, degree2, k1, k2, operator, penal))
-  }, cl = 1)
-  
-  out <- rbindlist(out)
-  out[, `:=`(n = n, subsets = subsets, gamma = gamma)]
-  out
+out <- system.time({
+  cblb <- lapply(seq_row, function(i){
+    grid_val <- grid_vals[i]
+    n <- grid_val$n
+    subsets <- grid_val$subsets
+    gamma <- grid_val$gamma
+    b <- floor(n^gamma)
+    
+    out <- lapply(seq_len(replications), function(rp){
+      set.seed(rp)
+      dat <- kangschafer3_test(n = n, te = te, sigma = sigma, beta_overlap = 0.5)
+      return(causal_blb_aipw(data = dat, y = 'y', Tr = 'Tr', 
+                             confounders = c('X1', 'X2', 'X3', 'X4', 'X5', 'X6', 'X7', 'X8', 'X9', 'X10'),
+                             b = b, subsets = subsets, degree1, degree2, k1, k2, operator, penal))
+    })
+    
+    out <- rbindlist(out)
+    out[, `:=`(n = n, subsets = subsets, gamma = gamma)]
+    out
+  })
 })
-cblb <- rbindlist(cblb)
+print(out)
+
+# cblb <- rbindlist(cblb)
 

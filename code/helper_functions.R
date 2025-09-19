@@ -67,9 +67,7 @@ aipw_kernel_weights <- function(data, Tr, Y, confounder_names, degree1, degree2,
   
   p1 <- as.numeric(res.optim2_1$gpr$predict(matrix_eva))
   p0 <- as.numeric(res.optim2_0$gpr$predict(matrix_eva))
-  
-  est <- estimator(t1 = t1, n1 = n1, n = n)
-  V <- est$V
+
   
   #Quadratic part
   I1 <- diag( t1 )
@@ -125,6 +123,228 @@ aipw_kernel_weights <- function(data, Tr, Y, confounder_names, degree1, degree2,
   
   
 }
+
+aipw_kernel_weights_att_try <- function(data, Tr, Y, confounder_names, degree1, degree2, k1, k2, operator, penal, bootstrap_size=length(data),
+                                estimator=ate_estimator){
+  
+  if(data.table::is.data.table(data) == FALSE){
+    data <- data.table::as.data.table(data)
+  }
+  intervention <- data[[Tr]]
+  outcome <- data[[Y]]
+  confounders <- data[, ..confounder_names]
+  n <- nrow(data)
+  
+  t1 <- as.integer(intervention)
+  t0 <- as.integer((1-intervention))
+  y <- outcome
+  X <- data.frame(confounders, y, intervention)
+  
+  X1t <- X[X$intervention == 1, ]
+  X0t <- X[X$intervention == 0, ]
+  y1 <- y[X$intervention == 1]
+  y0 <- y[X$intervention == 0]
+  n1 <- sum(X$intervention == 1)
+  n0 <- sum(X$intervention == 0)
+  
+  mX0 <- as.matrix(X0t[, 1:(dim(X0t)[2]-2)])
+  mX1 <- as.matrix(X1t[, 1:(dim(X1t)[2]-2)])
+  mY0 <- as.matrix(y0)
+  mY1 <- as.matrix(y1)
+  
+  pyX0   <- np_array(np$array(mX0), dtype = "float")
+  pyX1   <- np_array(np$array(mX1), dtype = "float")
+  pyY0   <- np$array(mY0, dtype = "float")
+  pyY1   <- np$array(mY1, dtype = "float")
+  
+  res.optim2_0 <- tryCatch(gp(pyX0, pyY0,
+                              degree1 = degree1,
+                              degree2 = degree2,
+                              k1 = k1,
+                              k2 = k2,
+                              operator = operator),
+                           error=function(e) NULL)
+  
+  res.optim2_1 <- tryCatch(gp(pyX1,pyY1,
+                              degree1 = degree1,
+                              degree2 = degree2,
+                              k1 = k1,
+                              k2 = k2,
+                              operator=operator),
+                           error=function(e) {print(e); NULL})
+  # shape
+  # browser()
+  # print(str(pyX1)); print(str(pyY1))
+  # 
+  # # NA / Inf
+  # print(anyNA(pyX1)); print(any(!is.finite(pyX1)))
+  # 
+  # # How many treated
+  # print(table(data[[Tr]]))
+  
+  #compute K
+  matrix_eva <- as.matrix( confounders )
+  # evaluation matrix
+  res.optim2_1$par <- exp(res.optim2_1$gpr$kernel_$theta)
+  res.optim2_0$par <- exp(res.optim2_0$gpr$kernel_$theta)
+  # Gram matrices
+  K1 <- res.optim2_1$gpr$kernel_(matrix_eva)
+  K0 <- res.optim2_0$gpr$kernel_(matrix_eva)
+  browser()
+  
+  p1 <- as.numeric(res.optim2_1$gpr$predict(matrix_eva))
+  p0 <- as.numeric(res.optim2_0$gpr$predict(matrix_eva))
+  
+  
+  est <- estimator(t1 = t1, n1 = n1, n = n)
+  V <- est$V
+  
+  #Quadratic part
+  I1 <- diag( t1 )
+  I0 <- diag( t0 )
+  I1KI1 <- I1%*%K1%*%I1
+  # K0 if everyone had not been treated, the Gram matrix
+  # I1K0I1
+  I0KI0 <- I0%*%K0%*%I0
+  
+  KI1 <- diag(t1)%*%K1
+  KI0 <- diag(t0)%*%K0
+  # diag(t1)%*%K0
+  
+  # 
+  
+  VKI1 <- t(V)%*%KI1
+  VKI0 <- t(V)%*%KI0
+  VK <- t1%*%diag(t1)%*%K0
+  
+  tol <- 1e-08
+  
+  sigma1 <- res.optim2_1$par[3]^2
+  sigma0 <- res.optim2_0$par[3]^2
+  
+  # Sigma <- sigma1*diag(t1) + sigma0*diag(t0)
+  Sigma <- sigma0*diag(n)
+  #Update Q
+  # Q <- (1/n^2)*( I1KI1 + I0KI0 + penal*Sigma )
+  Q <- (1/n1^2)*( t(t1) %*% I1K0I1 %*% t1 + penal*Sigma ) #ATT
+  
+  #Update c
+  # c <- -2*(1/n^2)*(VKI1 + VKI0)
+  c <- -2*(1/n1)*(VK)
+  
+  rm(list = c("VKI1","VKI0"))
+  
+  model <- list()
+  # model$A          <- matrix(c( t1/n ,t0/n), nrow=2, byrow=T)
+  model$A <- matrix(rep(1/n, n), nrow=1, byrow = True)
+  # model$rhs        <- c(1,1)
+  model$rhs <- 1
+  model$modelsense <- "min"
+  model$Q          <- Q
+  model$obj        <- c
+  model$sense      <- c("=")
+  model$lb <- rep(tol,n)
+  model$vtypes <- "C"
+  Dmat <- Q  # Symmetric positive-definite matrix for the quadratic term
+  dvec <- c  # Linear coefficients
+  Amat <- t(matrix(c(t1/n, t0/n), nrow = 2, byrow = TRUE))
+  bvec <- c(1, 1)  # Right-hand side values for the equality constraints
+  meq <- 2  # N
+  
+  params <- list(Presolve=2,OutputFlag=0,QCPDual=0)
+  
+  res <- quadprog::solve.QP(Dmat = Dmat, dvec = dvec, Amat = Amat, bvec = bvec, meq = meq)
+  # phi0 <- (1-data[[Tr]])*res$solution*(data[[Y]] - p0) + p0
+  phi0 <- n1*t1*(res$solution*(data[[Y]] - p0) + p0)
+  mean(data[[Y]][data$Tr == 1]) - mean(phi0)
+  # phi1 <- (data[[Tr]])*res$solution*(data[[Y]] - p1) + p1
+  
+  tau_hat <- est$aggregate(phi1 = phi1, phi0 = phi0, t1 = t1, n1 = n1, n = n)
+  
+  return(list(phi1 = phi1, phi0 = phi0, tau_hat = tau_hat))
+  
+  
+  
+}
+
+att_kernel_weights <- function(data, Tr, Y, confounder_names, degree1, degree2, k1, k2, operator, penal, bootstrap_size=length(data),
+                                estimator=ate_estimator){
+  
+  if(data.table::is.data.table(data) == FALSE){
+    data <- data.table::as.data.table(data)
+  }
+  intervention <- data[[Tr]]
+  outcome <- data[[Y]]
+  confounders <- data[, ..confounder_names]
+  n <- nrow(data)
+  
+  t1 <- as.integer(intervention)
+  t0 <- as.integer((1-intervention))
+  y <- outcome
+  X <- data.frame(confounders, y, intervention)
+  
+  X1t <- X[X$intervention == 1, ]
+  X0t <- X[X$intervention == 0, ]
+  y1 <- y[X$intervention == 1]
+  y0 <- y[X$intervention == 0]
+  n1 <- sum(X$intervention == 1)
+  n0 <- sum(X$intervention == 0)
+  
+  mX0 <- as.matrix(X0t[, 1:(dim(X0t)[2]-2)])
+  mX1 <- as.matrix(X1t[, 1:(dim(X1t)[2]-2)])
+  mY0 <- as.matrix(y0)
+  mY1 <- as.matrix(y1)
+  
+  pyX0   <- np_array(np$array(mX0), dtype = "float")
+  pyX1   <- np_array(np$array(mX1), dtype = "float")
+  pyY0   <- np$array(mY0, dtype = "float")
+  pyY1   <- np$array(mY1, dtype = "float")
+  
+  res.optim2_0 <- tryCatch(gp(pyX0, pyY0,
+                              degree1 = degree1,
+                              degree2 = degree2,
+                              k1 = k1,
+                              k2 = k2,
+                              operator = operator),
+                           error=function(e) NULL)
+  
+  #compute K
+  # evaluation matrix
+  res.optim2_0$par <- exp(res.optim2_0$gpr$kernel_$theta)
+  # Gram matrices
+  K11 <- res.optim2_0$gpr$kernel_(mX1, mX1)
+  K10 <- res.optim2_0$gpr$kernel_(mX1, mX0)
+  K00 <- res.optim2_0$gpr$kernel_(mX0, mX0)
+
+  sigma0 <- res.optim2_0$par[3]^2
+  browser()
+  
+  # Sigma <- sigma1*diag(t1) + sigma0*diag(t0)
+  Sigma <- sigma0*diag(n0)
+  #Update Q
+  Q <- 2*( K00 + penal*Sigma ) #ATT
+  c <- as.numeric((2 / n1) * colSums(K10))
+
+  
+  Dmat <- Q  # Symmetric positive-definite matrix for the quadratic term
+  dvec <- c  # Linear coefficients
+  Amat <- cbind(rep(1, n0), diag(n0))  # First column: equality constraint, rest: inequalities
+  bvec <- c(1, rep(0, n0))             # sum(W) = 1, and W ≥ 0
+  meq <- 1
+  browser()
+
+  res <- quadprog::solve.QP(Dmat = Dmat, dvec = dvec, Amat = Amat, bvec = bvec, meq = meq)
+  # phi0 <- (1-data[[Tr]])*res$solution*(data[[Y]] - p0) + p0
+  
+  Y1_mean <- mean(data[[Y]][data[[Tr]] == 1])
+  Y0_weighted <- sum(res$solution*data[[Y]][data[[Tr]] == 0])
+  
+  return(Y1_mean - Y0_weighted)
+
+  
+}
+
+
 
 ate_estimator <- function(t1, n1, n) {
   list(
