@@ -47,7 +47,7 @@ aipw_kernel_weights <- function(data, Tr, Y, confounder_names, degree1, degree2,
                                  operator=operator),
                               error=function(e) {print(e); NULL})
   # shape
-  # browser()
+  # 
   # print(str(pyX1)); print(str(pyY1))
   # 
   # # NA / Inf
@@ -67,6 +67,10 @@ aipw_kernel_weights <- function(data, Tr, Y, confounder_names, degree1, degree2,
   
   p1 <- as.numeric(res.optim2_1$gpr$predict(matrix_eva))
   p0 <- as.numeric(res.optim2_0$gpr$predict(matrix_eva))
+  
+  
+  est <- estimator(t1 = t1, n1 = n1, n = n)
+  V <- est$V
 
   
   #Quadratic part
@@ -173,7 +177,6 @@ aipw_kernel_weights_att_try <- function(data, Tr, Y, confounder_names, degree1, 
                               operator=operator),
                            error=function(e) {print(e); NULL})
   # shape
-  # browser()
   # print(str(pyX1)); print(str(pyY1))
   # 
   # # NA / Inf
@@ -190,8 +193,7 @@ aipw_kernel_weights_att_try <- function(data, Tr, Y, confounder_names, degree1, 
   # Gram matrices
   K1 <- res.optim2_1$gpr$kernel_(matrix_eva)
   K0 <- res.optim2_0$gpr$kernel_(matrix_eva)
-  browser()
-  
+
   p1 <- as.numeric(res.optim2_1$gpr$predict(matrix_eva))
   p0 <- as.numeric(res.optim2_0$gpr$predict(matrix_eva))
   
@@ -267,8 +269,7 @@ aipw_kernel_weights_att_try <- function(data, Tr, Y, confounder_names, degree1, 
   
 }
 
-att_kernel_weights <- function(data, Tr, Y, confounder_names, degree1, degree2, k1, k2, operator, penal, bootstrap_size=length(data),
-                                estimator=ate_estimator){
+att_kernel_weights <- function(data, Tr, Y, confounder_names, degree1, degree2, k1, k2, operator, penal){
   
   if(data.table::is.data.table(data) == FALSE){
     data <- data.table::as.data.table(data)
@@ -307,6 +308,9 @@ att_kernel_weights <- function(data, Tr, Y, confounder_names, degree1, degree2, 
                               k2 = k2,
                               operator = operator),
                            error=function(e) NULL)
+
+  # p1 <- as.numeric(res.optim2_1$gpr$predict(matrix_eva))
+  # p0 <- as.numeric(res.optim2_0$gpr$predict(matrix_eva))
   
   #compute K
   # evaluation matrix
@@ -317,8 +321,7 @@ att_kernel_weights <- function(data, Tr, Y, confounder_names, degree1, degree2, 
   K00 <- res.optim2_0$gpr$kernel_(mX0, mX0)
 
   sigma0 <- res.optim2_0$par[3]^2
-  browser()
-  
+
   # Sigma <- sigma1*diag(t1) + sigma0*diag(t0)
   Sigma <- sigma0*diag(n0)
   #Update Q
@@ -331,13 +334,12 @@ att_kernel_weights <- function(data, Tr, Y, confounder_names, degree1, degree2, 
   Amat <- cbind(rep(1, n0), diag(n0))  # First column: equality constraint, rest: inequalities
   bvec <- c(1, rep(0, n0))             # sum(W) = 1, and W ≥ 0
   meq <- 1
-  browser()
 
   res <- quadprog::solve.QP(Dmat = Dmat, dvec = dvec, Amat = Amat, bvec = bvec, meq = meq)
   # phi0 <- (1-data[[Tr]])*res$solution*(data[[Y]] - p0) + p0
   
   Y1_mean <- mean(data[[Y]][data[[Tr]] == 1])
-  Y0_weighted <- sum(res$solution*data[[Y]][data[[Tr]] == 0])
+  Y0_weighted <- sum(res$solution*(data[[Y]][data[[Tr]] == 0]))
   
   return(Y1_mean - Y0_weighted)
 
