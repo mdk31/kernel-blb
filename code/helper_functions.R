@@ -464,7 +464,7 @@ causal_blb_aipw <- function(data, y, Tr, confounders, b, subsets,  degree1, degr
   
   blb_out <- lapply(partitions, function(i){
     tmp_dat <- data[i]
-    output <- aipw_kernel_weights(tmp_dat, Tr, y, confounders,
+    output <- att_kernel_weights(tmp_dat, Tr, y, confounders,
                                   degree1, degree2, k1, k2, operator, penal)
     phi1 <- output$phi1
     phi0 <- output$phi0

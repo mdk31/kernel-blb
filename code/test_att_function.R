@@ -45,7 +45,7 @@ out <- pblapply(seq_len(replications), function(rp){
   set.seed(rp)
   dat <- kangschafer3_test(n = n_values, te = te, sigma = sigma, beta_overlap = 0.5)
   satt <- mean(dat$Y1[dat$Tr == 1]) - mean(dat$Y0[dat$Tr == 1])
-  
+
   att_estim <- att_kernel_weights(dat, 
                      Tr = 'Tr', 
                      Y = 'y', 
