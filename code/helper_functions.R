@@ -1,132 +1,323 @@
-aipw_kernel_weights <- function(data, Tr, Y, confounder_names, degree1, degree2, k1, k2, operator, penal, bootstrap_size=length(data),
-                                estimator=ate_estimator){
+aipw_kernel_weights <- function(data, Tr, Y, confounder_names, degree1, degree2, k1, k2, operator, penal, bootstrap_size = length(data),
+                                estimator = ate_estimator){
   
   if(data.table::is.data.table(data) == FALSE){
     data <- data.table::as.data.table(data)
-  }
-  intervention <- data[[Tr]]
-  outcome <- data[[Y]]
-  confounders <- data[, ..confounder_names]
-  n <- nrow(data)
-  
-  t1 <- as.integer(intervention)
-  t0 <- as.integer((1-intervention))
-  y <- outcome
-  X <- data.frame(confounders, y, intervention)
-  
-  X1t <- X[X$intervention == 1, ]
-  X0t <- X[X$intervention == 0, ]
-  y1 <- y[X$intervention == 1]
-  y0 <- y[X$intervention == 0]
-  n1 <- sum(X$intervention == 1)
-  n0 <- sum(X$intervention == 0)
-  
-  mX0 <- as.matrix(X0t[, 1:(dim(X0t)[2]-2)])
-  mX1 <- as.matrix(X1t[, 1:(dim(X1t)[2]-2)])
-  mY0 <- as.matrix(y0)
-  mY1 <- as.matrix(y1)
-  
-  pyX0   <- np_array(np$array(mX0), dtype = "float")
-  pyX1   <- np_array(np$array(mX1), dtype = "float")
-  pyY0   <- np$array(mY0, dtype = "float")
-  pyY1   <- np$array(mY1, dtype = "float")
-  
-  res.optim2_0 <- tryCatch(gp(pyX0, pyY0,
-                                 degree1 = degree1,
-                                 degree2 = degree2,
-                                 k1 = k1,
-                                 k2 = k2,
-                                 operator = operator),
-                              error=function(e) NULL)
-  
-  res.optim2_1 <- tryCatch(gp(pyX1,pyY1,
-                                 degree1 = degree1,
-                                 degree2 = degree2,
-                                 k1 = k1,
-                                 k2 = k2,
-                                 operator=operator),
-                              error=function(e) {print(e); NULL})
-  # shape
-  # 
-  # print(str(pyX1)); print(str(pyY1))
-  # 
-  # # NA / Inf
-  # print(anyNA(pyX1)); print(any(!is.finite(pyX1)))
-  # 
-  # # How many treated
-  # print(table(data[[Tr]]))
-  
-  #compute K
-  matrix_eva <- as.matrix( confounders )
-  # evaluation matrix
-  res.optim2_1$par <- exp(res.optim2_1$gpr$kernel_$theta)
-  res.optim2_0$par <- exp(res.optim2_0$gpr$kernel_$theta)
-  # Gram matrices
-  K1 <- res.optim2_1$gpr$kernel_(matrix_eva)
-  K0 <- res.optim2_0$gpr$kernel_(matrix_eva)
-  
-  p1 <- as.numeric(res.optim2_1$gpr$predict(matrix_eva))
-  p0 <- as.numeric(res.optim2_0$gpr$predict(matrix_eva))
-  
-  
-  est <- estimator(t1 = t1, n1 = n1, n = n)
-  V <- est$V
+# aipw_kernel_weights <- function(data, Tr, Y, confounder_names, degree1, degree2, k1, k2, operator, penal,
+#                                 bootstrap_size = length(data),
+#                                 estimator = ate_estimator){
+#   
+#   if (data.table::is.data.table(data) == FALSE) {
+#     data <- data.table::as.data.table(data)
+#   }
+#   
+#   intervention <- data[[Tr]]
+#   outcome      <- data[[Y]]
+#   n            <- nrow(data)
+#   
+#   t1 <- as.integer(intervention)
+#   t0 <- as.integer(1 - intervention)
+#   y  <- outcome
+#   
+#   ## Predictor scaling (global, across all units)
+#   confounders_raw <- data[, ..confounder_names]
+#   conf_mat        <- data.matrix(confounders_raw)
+#   x_mean          <- colMeans(conf_mat)
+#   x_sd            <- apply(conf_mat, 2, sd)
+#   conf_mat_scaled <- scale(conf_mat, center = x_mean, scale = x_sd)
+#   confounders     <- as.data.frame(conf_mat_scaled)
+#   colnames(confounders) <- confounder_names
+#   
+#   X <- data.frame(confounders, y, intervention)
+#   
+#   X1t <- X[X$intervention == 1, ]
+#   X0t <- X[X$intervention == 0, ]
+#   y1  <- y[X$intervention == 1]
+#   y0  <- y[X$intervention == 0]
+#   
+#   ## Outcome scaling (global, treated + control together)
+#   y_mean    <- mean(y)
+#   y_sd      <- sd(y)
+#   y1_scaled <- (y1 - y_mean) / y_sd
+#   y0_scaled <- (y0 - y_mean) / y_sd
+#   
+#   n1 <- sum(X$intervention == 1)
+#   n0 <- sum(X$intervention == 0)
+#   
+#   mX0 <- data.matrix(X0t[, 1:(ncol(X0t) - 2)])
+#   mX1 <- data.matrix(X1t[, 1:(ncol(X1t) - 2)])
+#   
+#   ## Use scaled outcomes for GP fitting
+#   mY0 <- as.matrix(y0_scaled)
+#   mY1 <- as.matrix(y1_scaled)
+#   
+#   pyX0 <- np_array(np$array(mX0), dtype = "float")
+#   pyX1 <- np_array(np$array(mX1), dtype = "float")
+#   pyY0 <- np$array(mY0, dtype = "float")
+#   pyY1 <- np$array(mY1, dtype = "float")
+#   
+#   res.optim2_0 <- tryCatch(
+#     gp(pyX0, pyY0,
+#        degree1 = degree1,
+#        degree2 = degree2,
+#        k1 = k1,
+#        k2 = k2,
+#        operator = operator),
+#     error = function(e) NULL
+#   )
+#   
+#   res.optim2_1 <- tryCatch(
+#     gp(pyX1, pyY1,
+#        degree1 = degree1,
+#        degree2 = degree2,
+#        k1 = k1,
+#        k2 = k2,
+#        operator = operator),
+#     error = function(e) { print(e); NULL }
+#   )
+#   
+#   ## Evaluation matrix: scaled predictors
+#   matrix_eva <- data.matrix(confounders)
+#   
+#   ## Store kernel parameters on exp(theta) scale
+#   res.optim2_1$par <- exp(res.optim2_1$gpr$kernel_$theta)
+#   res.optim2_0$par <- exp(res.optim2_0$gpr$kernel_$theta)
+#   
+#   ## Gram matrices (on scaled predictor space)
+#   K1 <- res.optim2_1$gpr$kernel_(matrix_eva)
+#   K0 <- res.optim2_0$gpr$kernel_(matrix_eva)
+#   
+#   ## Predictions in scaled-y units, then unscale
+#   p1_scaled <- as.numeric(res.optim2_1$gpr$predict(matrix_eva))
+#   p0_scaled <- as.numeric(res.optim2_0$gpr$predict(matrix_eva))
+#   
+#   p1 <- p1_scaled * y_sd + y_mean
+#   p0 <- p0_scaled * y_sd + y_mean
+#   
+#   est <- estimator(t1 = t1, n1 = n1, n = n)
+#   V   <- est$V
+#   
+#   ## Quadratic part
+#   I1    <- diag(t1)
+#   I0    <- diag(t0)
+#   I1KI1 <- I1 %*% K1 %*% I1
+#   I0KI0 <- I0 %*% K0 %*% I0
+#   
+#   KI1 <- diag(t1) %*% K1
+#   KI0 <- diag(t0) %*% K0
+#   
+#   VKI1 <- t(V) %*% KI1
+#   VKI0 <- t(V) %*% KI0
+#   
+#   tol <- 1e-08
+#   
+#   ## Noise variances: from scaled-y units back to original y units
+#   sigma1_scaled <- res.optim2_1$par[3]^2
+#   sigma0_scaled <- res.optim2_0$par[3]^2
+#   
+#   sigma1 <- sigma1_scaled * y_sd^2
+#   sigma0 <- sigma0_scaled * y_sd^2
+#   
+#   Sigma <- sigma1 * diag(t1) + sigma0 * diag(t0)
+#   
+#   ## Update Q
+#   Q <- (1 / n^2) * (I1KI1 + I0KI0 + penal * Sigma)
+#   
+#   ## Update c
+#   c <- -2 * (1 / n^2) * (VKI1 + VKI0)
+#   
+#   rm(list = c("VKI1", "VKI0"))
+#   
+#   model <- list()
+#   model$A          <- matrix(c(t1 / n, t0 / n), nrow = 2, byrow = TRUE)
+#   model$rhs        <- c(1, 1)
+#   model$modelsense <- "min"
+#   model$Q          <- Q
+#   model$obj        <- c
+#   model$sense      <- c("=")
+#   model$lb         <- rep(tol, n)
+#   model$vtypes     <- "C"
+#   
+#   Dmat <- Q   # Symmetric positive-definite matrix for the quadratic term
+#   dvec <- c   # Linear coefficients
+#   Amat <- t(matrix(c(t1 / n, t0 / n), nrow = 2, byrow = TRUE))
+#   bvec <- c(1, 1)  # Right-hand side values for the equality constraints
+#   meq  <- 2
+#   
+#   params <- list(Presolve = 2, OutputFlag = 0, QCPDual = 0)
+#   
+#   tryCatch({
+#     res <- quadprog::solve.QP(Dmat = Dmat, dvec = dvec, Amat = Amat,
+#                               bvec = bvec, meq = meq)
+#   }, error = function(e) browser())
+#   
+#   phi0 <- (1 - data[[Tr]]) * res$solution * (data[[Y]] - p0) + p0
+#   phi1 <- (data[[Tr]])     * res$solution * (data[[Y]] - p1) + p1
+#   
+#   tau_hat <- est$aggregate(phi1 = phi1, phi0 = phi0,
+#                            t1 = t1, n1 = n1, n = n)
+#   
+#   return(list(phi1 = phi1, phi0 = phi0, tau_hat = tau_hat))
+# }
 
-  
-  #Quadratic part
-  I1 <- diag( t1 )
-  I0 <- diag( t0 )
-  I1KI1 <- I1%*%K1%*%I1
-  I0KI0 <- I0%*%K0%*%I0
-  
-  KI1 <- diag(t1)%*%K1
-  KI0 <- diag(t0)%*%K0
-  
-  VKI1 <- t(V)%*%KI1
-  VKI0 <- t(V)%*%KI0
-  
-  tol <- 1e-08
-  
-  sigma1 <- res.optim2_1$par[3]^2
-  sigma0 <- res.optim2_0$par[3]^2
-  
-  Sigma <- sigma1*diag(t1) + sigma0*diag(t0)
-  #Update Q
-  Q <- (1/n^2)*( I1KI1 + I0KI0 + penal*Sigma )
-  
-  #Update c
-  c <- -2*(1/n^2)*(VKI1 + VKI0)
-  
-  rm(list = c("VKI1","VKI0"))
-  
-  model <- list()
-  model$A          <- matrix(c( t1/n ,t0/n), nrow=2, byrow=T)
-  model$rhs        <- c(1,1)
-  model$modelsense <- "min"
-  model$Q          <- Q
-  model$obj        <- c
-  model$sense      <- c("=")
-  model$lb <- rep(tol,n)
-  model$vtypes <- "C"
-  Dmat <- Q  # Symmetric positive-definite matrix for the quadratic term
-  dvec <- c  # Linear coefficients
-  Amat <- t(matrix(c(t1/n, t0/n), nrow = 2, byrow = TRUE))
-  bvec <- c(1, 1)  # Right-hand side values for the equality constraints
-  meq <- 2  # N
-  
-  params <- list(Presolve=2,OutputFlag=0,QCPDual=0)
-  
-  res <- quadprog::solve.QP(Dmat = Dmat, dvec = dvec, Amat = Amat, bvec = bvec, meq = meq)
-  phi0 <- (1-data[[Tr]])*res$solution*(data[[Y]] - p0) + p0
-  phi1 <- (data[[Tr]])*res$solution*(data[[Y]] - p1) + p1
-  
-  tau_hat <- est$aggregate(phi1 = phi1, phi0 = phi0, t1 = t1, n1 = n1, n = n)
-  
-  return(list(phi1 = phi1, phi0 = phi0, tau_hat = tau_hat))
-  
-  
-  
-}
+    aipw_kernel_weights <- function(data, Tr, Y, confounder_names, degree1, degree2, k1, k2, operator, penal,
+                                    bootstrap_size = length(data),
+                                    estimator = ate_estimator){
+      
+      if (data.table::is.data.table(data) == FALSE) {
+        data <- data.table::as.data.table(data)
+      }
+      
+      intervention <- data[[Tr]]
+      outcome      <- data[[Y]]
+      n            <- nrow(data)
+      
+      t1 <- as.integer(intervention)
+      t0 <- as.integer(1 - intervention)
+      y  <- outcome
+      
+      ## Predictor scaling (global, across all units)
+      confounders_raw <- data[, ..confounder_names]
+      conf_mat        <- data.matrix(confounders_raw)
+      x_mean          <- colMeans(conf_mat)
+      x_sd            <- apply(conf_mat, 2, sd)
+      conf_mat_scaled <- scale(conf_mat, center = x_mean, scale = x_sd)
+      confounders     <- as.data.frame(conf_mat_scaled)
+      colnames(confounders) <- confounder_names
+      
+      X <- data.frame(confounders, y, intervention)
+      
+      X1t <- X[X$intervention == 1, ]
+      X0t <- X[X$intervention == 0, ]
+      y1  <- y[X$intervention == 1]
+      y0  <- y[X$intervention == 0]
+      
+      ## Outcome scaling (global, treated + control together)
+      y_mean    <- mean(y)
+      y_sd      <- sd(y)
+      y1_scaled <- (y1 - y_mean) / y_sd
+      y0_scaled <- (y0 - y_mean) / y_sd
+      
+      n1 <- sum(X$intervention == 1)
+      n0 <- sum(X$intervention == 0)
+      
+      mX0 <- data.matrix(X0t[, 1:(ncol(X0t) - 2)])
+      mX1 <- data.matrix(X1t[, 1:(ncol(X1t) - 2)])
+      
+      ## Use scaled outcomes for GP fitting
+      mY0 <- as.matrix(y0_scaled)
+      mY1 <- as.matrix(y1_scaled)
+      
+      pyX0 <- np_array(np$array(mX0), dtype = "float")
+      pyX1 <- np_array(np$array(mX1), dtype = "float")
+      pyY0 <- np$array(mY0, dtype = "float")
+      pyY1 <- np$array(mY1, dtype = "float")
+      
+      res.optim2_0 <- tryCatch(
+        gp(pyX0, pyY0,
+           degree1 = degree1,
+           degree2 = degree2,
+           k1 = k1,
+           k2 = k2,
+           operator = operator),
+        error = function(e) NULL
+      )
+      
+      res.optim2_1 <- tryCatch(
+        gp(pyX1, pyY1,
+           degree1 = degree1,
+           degree2 = degree2,
+           k1 = k1,
+           k2 = k2,
+           operator = operator),
+        error = function(e) { print(e); NULL }
+      )
+      
+      ## Evaluation matrix: scaled predictors
+      matrix_eva <- data.matrix(confounders)
+      
+      ## Store kernel parameters on exp(theta) scale
+      res.optim2_1$par <- exp(res.optim2_1$gpr$kernel_$theta)
+      res.optim2_0$par <- exp(res.optim2_0$gpr$kernel_$theta)
+      
+      ## Gram matrices (on scaled predictor space)
+      K1 <- res.optim2_1$gpr$kernel_(matrix_eva)
+      K0 <- res.optim2_0$gpr$kernel_(matrix_eva)
+      
+      ## Predictions in scaled-y units, then unscale
+      p1_scaled <- as.numeric(res.optim2_1$gpr$predict(matrix_eva))
+      p0_scaled <- as.numeric(res.optim2_0$gpr$predict(matrix_eva))
+      
+      p1 <- p1_scaled * y_sd + y_mean
+      p0 <- p0_scaled * y_sd + y_mean
+      
+      est <- estimator(t1 = t1, n1 = n1, n = n)
+      V   <- est$V
+      
+      ## Quadratic part
+      I1    <- diag(t1)
+      I0    <- diag(t0)
+      I1KI1 <- I1 %*% K1 %*% I1
+      I0KI0 <- I0 %*% K0 %*% I0
+      
+      KI1 <- diag(t1) %*% K1
+      KI0 <- diag(t0) %*% K0
+      
+      VKI1 <- t(V) %*% KI1
+      VKI0 <- t(V) %*% KI0
+      
+      tol <- 1e-08
+      
+      ## Noise variances: from scaled-y units back to original y units
+      sigma1_scaled <- res.optim2_1$par[3]^2
+      sigma0_scaled <- res.optim2_0$par[3]^2
+      
+      sigma1 <- sigma1_scaled * y_sd^2
+      sigma0 <- sigma0_scaled * y_sd^2
+      
+      Sigma <- sigma1 * diag(t1) + sigma0 * diag(t0)
+      
+      ## Update Q
+      Q <- (1 / n^2) * (I1KI1 + I0KI0 + penal * Sigma)
+      
+      ## Update c
+      c <- -2 * (1 / n^2) * (VKI1 + VKI0)
+      
+      rm(list = c("VKI1", "VKI0"))
+      
+      model <- list()
+      model$A          <- matrix(c(t1 / n, t0 / n), nrow = 2, byrow = TRUE)
+      model$rhs        <- c(1, 1)
+      model$modelsense <- "min"
+      model$Q          <- Q
+      model$obj        <- c
+      model$sense      <- c("=")
+      model$lb         <- rep(tol, n)
+      model$vtypes     <- "C"
+      
+      Dmat <- Q   # Symmetric positive-definite matrix for the quadratic term
+      dvec <- c   # Linear coefficients
+      Amat <- t(matrix(c(t1 / n, t0 / n), nrow = 2, byrow = TRUE))
+      bvec <- c(1, 1)  # Right-hand side values for the equality constraints
+      meq  <- 2
+      
+      params <- list(Presolve = 2, OutputFlag = 0, QCPDual = 0)
+      
+      tryCatch({
+        res <- quadprog::solve.QP(Dmat = Dmat, dvec = dvec, Amat = Amat,
+                                  bvec = bvec, meq = meq)
+      }, error = function(e) browser())
+      
+      phi0 <- (1 - data[[Tr]]) * res$solution * (data[[Y]] - p0) + p0
+      phi1 <- (data[[Tr]])     * res$solution * (data[[Y]] - p1) + p1
+      
+      tau_hat <- est$aggregate(phi1 = phi1, phi0 = phi0,
+                               t1 = t1, n1 = n1, n = n)
+      
+      return(list(phi1 = phi1, phi0 = phi0, tau_hat = tau_hat))
+    }
+    
+
 
 parametric_weights <- function(data, Tr, Y, confounder_names, family_outcome = stats::gaussian, family_propensity = stats::binomial){
   
@@ -499,7 +690,7 @@ causal_blb_aipw <- function(data, y, Tr, confounders, b, subsets, disjoint = TRU
   
   blb_out <- lapply(partitions, function(i){
     tmp_dat <- data[i]
-    main_args <- list(data = tmp_dat, Tr = Tr, y = y, confounders = confounders)
+    main_args <- list(data = tmp_dat, Tr = Tr, Y = y, confounder_names = confounders)
     output <- do.call(weight_function, c(main_args, list(...)))
 
     phi1 <- output$phi1
@@ -520,6 +711,7 @@ causal_blb_aipw <- function(data, y, Tr, confounders, b, subsets, disjoint = TRU
   })
   
   blb_out <- rbindlist(blb_out)
+  browser()
   blb_out <- blb_out[, .(lower_ci = mean(lower_ci),
                          upper_ci = mean(upper_ci),
                          estim = mean(estim),
