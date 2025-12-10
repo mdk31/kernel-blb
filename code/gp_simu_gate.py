@@ -127,7 +127,7 @@ def gp(x,y,degree1,degree2,k1,k2,operator):
   if operator == "single":
       #print(" -- SINGLE -- ")
       if k1 == "poly":
-        k     = ConstantKernel()*( ( DotProduct()**degree1  ) ) + WhiteKernel()
+        k     = ConstantKernel(1.0, (1e-10, 1e5))*( ( DotProduct()**degree1  ) ) + WhiteKernel()
         #k     = ( ( DotProduct(sigma_0=1)**degree1  ) ) + WhiteKernel()
         #k     = ConstantKernel()*( ( DotProduct(sigma_0=1)**degree1  ) ) + WhiteKernel()
         gpr   = GaussianProcessRegressor(kernel=k).fit(x,y)
@@ -146,12 +146,5 @@ def gp(x,y,degree1,degree2,k1,k2,operator):
 
 
   return {'gpr': gpr, 'GramMatrix': GramM}
-  
-  
-  
-  
-  
-  
-  
   
   

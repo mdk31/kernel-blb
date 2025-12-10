@@ -1,0 +1,228 @@
+---
+title: "NVSS natality"
+author: "Michele Santacatterina"
+date: "2025-11-14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(vroom)
+library(readr)
+library(dplyr)
+library(tidyr)
+library(stringr)
+```
+
+Assumptions
+
+- Use 2016+ public-use NVSS (smoking by trimester available nationally). Variables from the 2022/2023 User Guides. 
+
+- Restrict to live, singleton, term births if desired; exclude implausible weights per the Guide.
+
+- Exposure: any smoking during pregnancy, or trimester-specific counts (convert to intensity bins).
+
+- Outcomes: continuous birth weight (DBWT) and LBW (<2500 g).
+
+- Confounders: maternal age (MAGER), education (MEDUC 2003-rev scale), race/ethnicity (MRACE6 + Hispanic), marital status (DMAR), parity/live-birth order (LBO_REC or TBO), prenatal care timing (PRECARE), payment source (PAY), plurality, state and year fixed effects.
+
+```{r}
+
+# paths
+PATH_DIR <- "~/Documents/Projects/kernel-blb/data"  # change if needed
+DCT_URL  <- "https://data.nber.org/nvss/natality/programs/dct/natality2023.dct"
+
+# locate the TXT
+txt_candidates <- list.files(PATH_DIR, pattern="\\.txt$", full.names=TRUE, ignore.case=TRUE)
+stopifnot(length(txt_candidates) >= 1)
+TXT <- txt_candidates[1]
+
+# load and parse the 2023 .dct
+DCT_FILE <- file.path(tempdir(), "natality2023.dct")
+download.file(DCT_URL, DCT_FILE, mode="wb", quiet=TRUE)
+dct <- read_lines(DCT_FILE)
+
+rx <- "_column\\((\\d+)\\)\\s+([a-z0-9]+)\\s+([A-Za-z0-9_]+)\\s+%([0-9]+)"
+m  <- str_match(dct, rx)
+dct_df <- data.frame(
+  start = as.integer(m[,2]),
+  type  = m[,3],
+  name  = m[,4],
+  width = as.integer(m[,5]),
+  stringsAsFactors = FALSE
+)
+dct_df <- dct_df[!is.na(dct_df$start), ]
+dct_df <- dct_df[order(dct_df$start), ]
+dct_df$end <- dct_df$start + dct_df$width - 1
+stopifnot(!is.na(TXT), file.exists(TXT))
+
+
+```
+
+
+```{r, include=T}
+# Byte positions (inclusive) from your 2023 .dct snippet
+# dob_yy 9–12; mager 75–76; mrace6 107; mhisp_r 115; dmar 120; meduc 124;
+# lbo_rec 179; precare 224–225; cig_1 255–256; cig_2 257–258; cig_3 259–260;
+# dplural 454; dbwt 504–507; pay 435
+pos <- fwf_positions(
+  start = c(   9,  75, 107, 115, 120, 124, 179, 224, 255, 257, 259, 454, 504, 435),
+  end   = c(  12,  76, 107, 115, 120, 124, 179, 225, 256, 258, 260, 454, 507, 435),
+  col_names = c("dob_yy","mager","mrace6","mhisp_r","dmar","meduc","lbo_rec",
+                "precare","cig_1","cig_2","cig_3","dplural","dbwt","pay")
+)
+
+# Read only those columns (fast, robust to .dct quirks)
+raw <- vroom_fwf(TXT, col_positions = pos, progress = TRUE, altrep = TRUE)
+
+# Minimal hygiene and variable construction
+nv <- raw |>
+  mutate(across(everything(), \(x) na_if(trimws(as.character(x)), ""))) |>
+  transmute(
+    # outcomes
+    dbwt    = as.integer(ifelse(dbwt == "9999", NA, dbwt)),
+    lbw     = as.integer(dbwt < 2500),
+
+    # exposure
+    cig1    = as.integer(ifelse(cig_1 %in% c("", "99"), NA, cig_1)),
+    cig2    = as.integer(ifelse(cig_2 %in% c("", "99"), NA, cig_2)),
+    cig3    = as.integer(ifelse(cig_3 %in% c("", "99"), NA, cig_3)),
+    any_smoke = as.integer((coalesce(cig1, 0) > 0) | (coalesce(cig2, 0) > 0) | (coalesce(cig3, 0) > 0)),
+
+    # confounders
+    age     = as.integer(ifelse(mager %in% c("", "99"), NA, mager)),
+    educ    = factor(ifelse(meduc %in% c("", "9"), NA, meduc)),
+    race6   = factor(ifelse(mrace6 %in% c("", "9"), NA, mrace6)),
+    hisp    = factor(ifelse(mhisp_r %in% c("", "9"), NA, mhisp_r)),
+    married = factor(ifelse(dmar %in% c("", "9"), NA, dmar)),
+    parity  = as.integer(ifelse(lbo_rec %in% c("", "9"), NA, lbo_rec)),
+    precare = as.integer(ifelse(precare %in% c("", "99"), NA, precare)),
+    pay     = factor(ifelse(pay %in% c("", "9"), NA, pay)),
+    plural1 = as.integer(dplural) == 1,
+    year    = as.integer(dob_yy)
+  ) |>
+  filter(plural1, dbwt >= 350, dbwt <= 6000) |>
+  drop_na(dbwt, age, educ, race6, hisp, married, parity, precare, pay, any_smoke, year)
+
+```
+
+
+```{r}
+
+#Augmented Inverse Probability Weighting (EIF based standard error)
+
+data <- nv
+n <- nrow(data)
+
+e  <- predict(glm(any_smoke ~ age + I(educ) + I(race6) + I(hisp) +
+    married + parity + precare + I(pay) , data = data, family = "binomial"),
+              type = "response")
+m0 <- predict(glm(dbwt ~ age + I(educ) + I(race6) + I(hisp) +
+    married + parity + precare + I(pay), subset = (any_smoke == 0), data = data), newdata = data)
+
+m1 <- predict(glm(dbwt ~ age + I(educ) + I(race6) + I(hisp) +
+    married + parity + precare + I(pay), subset = (any_smoke == 1), data = data), newdata = data)
+
+# trunc_bounds <- quantile(e, probs = c(0.1, 0.9), na.rm = TRUE)
+# e <- pmin(pmax(e, trunc_bounds[1]), trunc_bounds[2])
+
+phi1 <- (data$any_smoke * data$dbwt - (data$any_smoke - e) * m1)/e
+phi0 <- ( (1 - data$any_smoke) * data$dbwt - (data$any_smoke - e) * m0 )/(1-e)
+
+mu_hat <- mean(phi1) - mean(phi0)
+se_hat <- sqrt( var(phi1)/n + var(phi0)/n )
+
+ate_PE_aipw_eif <- mu_hat
+ate_SE_aipw_eif <- se_hat
+ate_CI_aipw_eif <- c(ate_PE_aipw_eif-qnorm(0.975)*ate_SE_aipw_eif, ate_PE_aipw_eif+qnorm(0.975)*ate_SE_aipw_eif)
+
+W <- ate_PE_aipw_eif/ate_SE_aipw_eif
+ate_PV_aipw_eif <- 2*pnorm(-abs(W))
+
+ate_aipw_eif <- data.frame("AIPW (EIF)",ate_PE_aipw_eif,ate_SE_aipw_eif,t(ate_CI_aipw_eif),ate_PV_aipw_eif)
+colnames(ate_aipw_eif) <-  c("Method","ATE estimate","SE","2.5 %","97.5 %","Pvalue")
+ate_aipw_eif
+
+naive <- mean(data$dbwt[data$any_smoke==1]) - mean(data$dbwt[data$any_smoke==0])
+naive
+
+print(summary(phi0))
+```
+
+# ```{r}
+# library(glmnet)
+# 
+# #Augmented Inverse Probability Weighting (EIF based standard error)
+# 
+# data <- nv
+# n <- nrow(data)
+# 
+# ## Cross-fitted penalized logistic regression for propensity scores
+# X <- model.matrix(any_smoke ~ age + I(educ) + I(race6) + I(hisp) +
+#                     married + parity + precare + I(pay),
+#                   data = data)[, -1]
+# 
+# y <- data$any_smoke
+# if (is.factor(y)) {
+#   y <- as.numeric(y) - 1
+# }
+# 
+# K <- 5
+# set.seed(123)
+# folds <- sample(rep(1:K, length.out = n))
+# e <- numeric(n)
+# 
+# for (k in 1:K) {
+#   train_idx <- which(folds != k)
+#   test_idx  <- which(folds == k)
+#   fit <- cv.glmnet(
+#     x = X[train_idx, , drop = FALSE],
+#     y = y[train_idx],
+#     family = "binomial",
+#     alpha  = 1
+#   )
+#   e[test_idx] <- as.numeric(
+#     predict(fit, newx = X[test_idx, , drop = FALSE],
+#             s = "lambda.min", type = "response")
+#   )
+# }
+# 
+# m0 <- predict(glm(dbwt ~ age + I(educ) + I(race6) + I(hisp) +
+#                     married + parity + precare + I(pay),
+#                   subset = (any_smoke == 0), data = data),
+#               newdata = data)
+# 
+# m1 <- predict(glm(dbwt ~ age + I(educ) + I(race6) + I(hisp) +
+#                     married + parity + precare + I(pay),
+#                   subset = (any_smoke == 1), data = data),
+#               newdata = data)
+# 
+# # trunc_bounds <- quantile(e, probs = c(0.1, 0.9), na.rm = TRUE)
+# # e <- pmin(pmax(e, trunc_bounds[1]), trunc_bounds[2])
+# 
+# phi1 <- (data$any_smoke * data$dbwt - (data$any_smoke - e) * m1)/e
+# phi0 <- ((1 - data$any_smoke) * data$dbwt - (data$any_smoke - e) * m0)/(1 - e)
+# 
+# mu_hat <- mean(phi1) - mean(phi0)
+# se_hat <- sqrt(var(phi1)/n + var(phi0)/n)
+# 
+# ate_PE_aipw_eif <- mu_hat
+# ate_SE_aipw_eif <- se_hat
+# ate_CI_aipw_eif <- c(
+#   ate_PE_aipw_eif - qnorm(0.975) * ate_SE_aipw_eif,
+#   ate_PE_aipw_eif + qnorm(0.975) * ate_SE_aipw_eif
+# )
+# 
+# W <- ate_PE_aipw_eif/ate_SE_aipw_eif
+# ate_PV_aipw_eif <- 2 * pnorm(-abs(W))
+# 
+# ate_aipw_eif <- data.frame(
+#   "AIPW (EIF)", ate_PE_aipw_eif, ate_SE_aipw_eif,
+#   t(ate_CI_aipw_eif), ate_PV_aipw_eif
+# )
+# colnames(ate_aipw_eif) <- c("Method", "ATE estimate", "SE", "2.5 %", "97.5 %", "Pvalue")
+# ate_aipw_eif
+# print(phi0)
+# 
+# ```

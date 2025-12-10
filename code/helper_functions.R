@@ -1,325 +1,5 @@
-aipw_kernel_weights <- function(data, Tr, Y, confounder_names, degree1, degree2, k1, k2, operator, penal, bootstrap_size = length(data),
-                                estimator = ate_estimator){
-  
-  if(data.table::is.data.table(data) == FALSE){
-    data <- data.table::as.data.table(data)
-# aipw_kernel_weights <- function(data, Tr, Y, confounder_names, degree1, degree2, k1, k2, operator, penal,
-#                                 bootstrap_size = length(data),
-#                                 estimator = ate_estimator){
-#   
-#   if (data.table::is.data.table(data) == FALSE) {
-#     data <- data.table::as.data.table(data)
-#   }
-#   
-#   intervention <- data[[Tr]]
-#   outcome      <- data[[Y]]
-#   n            <- nrow(data)
-#   
-#   t1 <- as.integer(intervention)
-#   t0 <- as.integer(1 - intervention)
-#   y  <- outcome
-#   
-#   ## Predictor scaling (global, across all units)
-#   confounders_raw <- data[, ..confounder_names]
-#   conf_mat        <- data.matrix(confounders_raw)
-#   x_mean          <- colMeans(conf_mat)
-#   x_sd            <- apply(conf_mat, 2, sd)
-#   conf_mat_scaled <- scale(conf_mat, center = x_mean, scale = x_sd)
-#   confounders     <- as.data.frame(conf_mat_scaled)
-#   colnames(confounders) <- confounder_names
-#   
-#   X <- data.frame(confounders, y, intervention)
-#   
-#   X1t <- X[X$intervention == 1, ]
-#   X0t <- X[X$intervention == 0, ]
-#   y1  <- y[X$intervention == 1]
-#   y0  <- y[X$intervention == 0]
-#   
-#   ## Outcome scaling (global, treated + control together)
-#   y_mean    <- mean(y)
-#   y_sd      <- sd(y)
-#   y1_scaled <- (y1 - y_mean) / y_sd
-#   y0_scaled <- (y0 - y_mean) / y_sd
-#   
-#   n1 <- sum(X$intervention == 1)
-#   n0 <- sum(X$intervention == 0)
-#   
-#   mX0 <- data.matrix(X0t[, 1:(ncol(X0t) - 2)])
-#   mX1 <- data.matrix(X1t[, 1:(ncol(X1t) - 2)])
-#   
-#   ## Use scaled outcomes for GP fitting
-#   mY0 <- as.matrix(y0_scaled)
-#   mY1 <- as.matrix(y1_scaled)
-#   
-#   pyX0 <- np_array(np$array(mX0), dtype = "float")
-#   pyX1 <- np_array(np$array(mX1), dtype = "float")
-#   pyY0 <- np$array(mY0, dtype = "float")
-#   pyY1 <- np$array(mY1, dtype = "float")
-#   
-#   res.optim2_0 <- tryCatch(
-#     gp(pyX0, pyY0,
-#        degree1 = degree1,
-#        degree2 = degree2,
-#        k1 = k1,
-#        k2 = k2,
-#        operator = operator),
-#     error = function(e) NULL
-#   )
-#   
-#   res.optim2_1 <- tryCatch(
-#     gp(pyX1, pyY1,
-#        degree1 = degree1,
-#        degree2 = degree2,
-#        k1 = k1,
-#        k2 = k2,
-#        operator = operator),
-#     error = function(e) { print(e); NULL }
-#   )
-#   
-#   ## Evaluation matrix: scaled predictors
-#   matrix_eva <- data.matrix(confounders)
-#   
-#   ## Store kernel parameters on exp(theta) scale
-#   res.optim2_1$par <- exp(res.optim2_1$gpr$kernel_$theta)
-#   res.optim2_0$par <- exp(res.optim2_0$gpr$kernel_$theta)
-#   
-#   ## Gram matrices (on scaled predictor space)
-#   K1 <- res.optim2_1$gpr$kernel_(matrix_eva)
-#   K0 <- res.optim2_0$gpr$kernel_(matrix_eva)
-#   
-#   ## Predictions in scaled-y units, then unscale
-#   p1_scaled <- as.numeric(res.optim2_1$gpr$predict(matrix_eva))
-#   p0_scaled <- as.numeric(res.optim2_0$gpr$predict(matrix_eva))
-#   
-#   p1 <- p1_scaled * y_sd + y_mean
-#   p0 <- p0_scaled * y_sd + y_mean
-#   
-#   est <- estimator(t1 = t1, n1 = n1, n = n)
-#   V   <- est$V
-#   
-#   ## Quadratic part
-#   I1    <- diag(t1)
-#   I0    <- diag(t0)
-#   I1KI1 <- I1 %*% K1 %*% I1
-#   I0KI0 <- I0 %*% K0 %*% I0
-#   
-#   KI1 <- diag(t1) %*% K1
-#   KI0 <- diag(t0) %*% K0
-#   
-#   VKI1 <- t(V) %*% KI1
-#   VKI0 <- t(V) %*% KI0
-#   
-#   tol <- 1e-08
-#   
-#   ## Noise variances: from scaled-y units back to original y units
-#   sigma1_scaled <- res.optim2_1$par[3]^2
-#   sigma0_scaled <- res.optim2_0$par[3]^2
-#   
-#   sigma1 <- sigma1_scaled * y_sd^2
-#   sigma0 <- sigma0_scaled * y_sd^2
-#   
-#   Sigma <- sigma1 * diag(t1) + sigma0 * diag(t0)
-#   
-#   ## Update Q
-#   Q <- (1 / n^2) * (I1KI1 + I0KI0 + penal * Sigma)
-#   
-#   ## Update c
-#   c <- -2 * (1 / n^2) * (VKI1 + VKI0)
-#   
-#   rm(list = c("VKI1", "VKI0"))
-#   
-#   model <- list()
-#   model$A          <- matrix(c(t1 / n, t0 / n), nrow = 2, byrow = TRUE)
-#   model$rhs        <- c(1, 1)
-#   model$modelsense <- "min"
-#   model$Q          <- Q
-#   model$obj        <- c
-#   model$sense      <- c("=")
-#   model$lb         <- rep(tol, n)
-#   model$vtypes     <- "C"
-#   
-#   Dmat <- Q   # Symmetric positive-definite matrix for the quadratic term
-#   dvec <- c   # Linear coefficients
-#   Amat <- t(matrix(c(t1 / n, t0 / n), nrow = 2, byrow = TRUE))
-#   bvec <- c(1, 1)  # Right-hand side values for the equality constraints
-#   meq  <- 2
-#   
-#   params <- list(Presolve = 2, OutputFlag = 0, QCPDual = 0)
-#   
-#   tryCatch({
-#     res <- quadprog::solve.QP(Dmat = Dmat, dvec = dvec, Amat = Amat,
-#                               bvec = bvec, meq = meq)
-#   }, error = function(e) browser())
-#   
-#   phi0 <- (1 - data[[Tr]]) * res$solution * (data[[Y]] - p0) + p0
-#   phi1 <- (data[[Tr]])     * res$solution * (data[[Y]] - p1) + p1
-#   
-#   tau_hat <- est$aggregate(phi1 = phi1, phi0 = phi0,
-#                            t1 = t1, n1 = n1, n = n)
-#   
-#   return(list(phi1 = phi1, phi0 = phi0, tau_hat = tau_hat))
-# }
-
-    aipw_kernel_weights <- function(data, Tr, Y, confounder_names, degree1, degree2, k1, k2, operator, penal,
-                                    bootstrap_size = length(data),
-                                    estimator = ate_estimator){
-      
-      if (data.table::is.data.table(data) == FALSE) {
-        data <- data.table::as.data.table(data)
-      }
-      
-      intervention <- data[[Tr]]
-      outcome      <- data[[Y]]
-      n            <- nrow(data)
-      
-      t1 <- as.integer(intervention)
-      t0 <- as.integer(1 - intervention)
-      y  <- outcome
-      
-      ## Predictor scaling (global, across all units)
-      confounders_raw <- data[, ..confounder_names]
-      conf_mat        <- data.matrix(confounders_raw)
-      x_mean          <- colMeans(conf_mat)
-      x_sd            <- apply(conf_mat, 2, sd)
-      conf_mat_scaled <- scale(conf_mat, center = x_mean, scale = x_sd)
-      confounders     <- as.data.frame(conf_mat_scaled)
-      colnames(confounders) <- confounder_names
-      
-      X <- data.frame(confounders, y, intervention)
-      
-      X1t <- X[X$intervention == 1, ]
-      X0t <- X[X$intervention == 0, ]
-      y1  <- y[X$intervention == 1]
-      y0  <- y[X$intervention == 0]
-      
-      ## Outcome scaling (global, treated + control together)
-      y_mean    <- mean(y)
-      y_sd      <- sd(y)
-      y1_scaled <- (y1 - y_mean) / y_sd
-      y0_scaled <- (y0 - y_mean) / y_sd
-      
-      n1 <- sum(X$intervention == 1)
-      n0 <- sum(X$intervention == 0)
-      
-      mX0 <- data.matrix(X0t[, 1:(ncol(X0t) - 2)])
-      mX1 <- data.matrix(X1t[, 1:(ncol(X1t) - 2)])
-      
-      ## Use scaled outcomes for GP fitting
-      mY0 <- as.matrix(y0_scaled)
-      mY1 <- as.matrix(y1_scaled)
-      
-      pyX0 <- np_array(np$array(mX0), dtype = "float")
-      pyX1 <- np_array(np$array(mX1), dtype = "float")
-      pyY0 <- np$array(mY0, dtype = "float")
-      pyY1 <- np$array(mY1, dtype = "float")
-      
-      res.optim2_0 <- tryCatch(
-        gp(pyX0, pyY0,
-           degree1 = degree1,
-           degree2 = degree2,
-           k1 = k1,
-           k2 = k2,
-           operator = operator),
-        error = function(e) NULL
-      )
-      
-      res.optim2_1 <- tryCatch(
-        gp(pyX1, pyY1,
-           degree1 = degree1,
-           degree2 = degree2,
-           k1 = k1,
-           k2 = k2,
-           operator = operator),
-        error = function(e) { print(e); NULL }
-      )
-      
-      ## Evaluation matrix: scaled predictors
-      matrix_eva <- data.matrix(confounders)
-      
-      ## Store kernel parameters on exp(theta) scale
-      res.optim2_1$par <- exp(res.optim2_1$gpr$kernel_$theta)
-      res.optim2_0$par <- exp(res.optim2_0$gpr$kernel_$theta)
-      
-      ## Gram matrices (on scaled predictor space)
-      K1 <- res.optim2_1$gpr$kernel_(matrix_eva)
-      K0 <- res.optim2_0$gpr$kernel_(matrix_eva)
-      
-      ## Predictions in scaled-y units, then unscale
-      p1_scaled <- as.numeric(res.optim2_1$gpr$predict(matrix_eva))
-      p0_scaled <- as.numeric(res.optim2_0$gpr$predict(matrix_eva))
-      
-      p1 <- p1_scaled * y_sd + y_mean
-      p0 <- p0_scaled * y_sd + y_mean
-      
-      est <- estimator(t1 = t1, n1 = n1, n = n)
-      V   <- est$V
-      
-      ## Quadratic part
-      I1    <- diag(t1)
-      I0    <- diag(t0)
-      I1KI1 <- I1 %*% K1 %*% I1
-      I0KI0 <- I0 %*% K0 %*% I0
-      
-      KI1 <- diag(t1) %*% K1
-      KI0 <- diag(t0) %*% K0
-      
-      VKI1 <- t(V) %*% KI1
-      VKI0 <- t(V) %*% KI0
-      
-      tol <- 1e-08
-      
-      ## Noise variances: from scaled-y units back to original y units
-      sigma1_scaled <- res.optim2_1$par[3]^2
-      sigma0_scaled <- res.optim2_0$par[3]^2
-      
-      sigma1 <- sigma1_scaled * y_sd^2
-      sigma0 <- sigma0_scaled * y_sd^2
-      
-      Sigma <- sigma1 * diag(t1) + sigma0 * diag(t0)
-      
-      ## Update Q
-      Q <- (1 / n^2) * (I1KI1 + I0KI0 + penal * Sigma)
-      
-      ## Update c
-      c <- -2 * (1 / n^2) * (VKI1 + VKI0)
-      
-      rm(list = c("VKI1", "VKI0"))
-      
-      model <- list()
-      model$A          <- matrix(c(t1 / n, t0 / n), nrow = 2, byrow = TRUE)
-      model$rhs        <- c(1, 1)
-      model$modelsense <- "min"
-      model$Q          <- Q
-      model$obj        <- c
-      model$sense      <- c("=")
-      model$lb         <- rep(tol, n)
-      model$vtypes     <- "C"
-      
-      Dmat <- Q   # Symmetric positive-definite matrix for the quadratic term
-      dvec <- c   # Linear coefficients
-      Amat <- t(matrix(c(t1 / n, t0 / n), nrow = 2, byrow = TRUE))
-      bvec <- c(1, 1)  # Right-hand side values for the equality constraints
-      meq  <- 2
-      
-      params <- list(Presolve = 2, OutputFlag = 0, QCPDual = 0)
-      
-      tryCatch({
-        res <- quadprog::solve.QP(Dmat = Dmat, dvec = dvec, Amat = Amat,
-                                  bvec = bvec, meq = meq)
-      }, error = function(e) browser())
-      
-      phi0 <- (1 - data[[Tr]]) * res$solution * (data[[Y]] - p0) + p0
-      phi1 <- (data[[Tr]])     * res$solution * (data[[Y]] - p1) + p1
-      
-      tau_hat <- est$aggregate(phi1 = phi1, phi0 = phi0,
-                               t1 = t1, n1 = n1, n = n)
-      
-      return(list(phi1 = phi1, phi0 = phi0, tau_hat = tau_hat))
-    }
-    
-
-
-parametric_weights <- function(data, Tr, Y, confounder_names, family_outcome = stats::gaussian, family_propensity = stats::binomial){
+####START NEW FUNCTIONS----
+aipw_kernel_weights <- function(data, Tr, Y, confounder_names, degree1, degree2, k1, k2, operator, penal, bootstrap_size=length(data)){
   
   if(data.table::is.data.table(data) == FALSE){
     data <- data.table::as.data.table(data)
@@ -329,29 +9,367 @@ parametric_weights <- function(data, Tr, Y, confounder_names, family_outcome = s
   confounders <- data[, ..confounder_names]
   n <- nrow(data)
   
-  # Create formula for models
-  outcome_formula <- as.formula(paste0(Y, " ~ ", paste(confounder_names, collapse = " + ")))
-  propensity_formula <- as.formula(paste0(Tr, " ~ ", paste(confounder_names, collapse = " + ")))
-
-  # Fit propensity score model on all data
-  e <- predict(glm(propensity_formula, data = data, family = family_propensity), 
-            type = "response")
+  t1 <- as.integer(intervention)
+  t0 <- as.integer((1-intervention))
+  y <- outcome
+  X <- data.frame(confounders, y, intervention)
   
-  # Fit outcome model m0 on control group, predict on all data
-  m0 <- predict(glm(outcome_formula, subset = (intervention == 0), data = data, family = family_outcome),
-            newdata = data, type = "response")
+  X1t <- X[X$intervention == 1, ]
+  X0t <- X[X$intervention == 0, ]
+  y1 <- y[X$intervention == 1]
+  y0 <- y[X$intervention == 0]
+  n1 <- sum(X$intervention == 1)
+  n0 <- sum(X$intervention == 0)
   
-  # Fit outcome model m1 on treated group, predict on all data
-  m1 <-  predict(glm(outcome_formula, subset = (intervention == 1), data = data, family = family_outcome),
-            newdata = data, type = "response")
+  mX0 <- data.matrix(X0t[, 1:(dim(X0t)[2]-2)])
+  mX1 <- data.matrix(X1t[, 1:(dim(X1t)[2]-2)])
   
-  # Compute phi1 and phi0 using standard AIPW formulas
-  phi1 <- (intervention * outcome - (intervention - e) * m1) / e
-  phi0 <- ((1 - intervention) * outcome - (intervention - e) * m0) / (1 - e)
+  mY0 <- as.matrix(y0)
+  mY1 <- as.matrix(y1)
   
+  pyX0   <- np_array(np$array(mX0), dtype = "float")
+  pyX1   <- np_array(np$array(mX1), dtype = "float")
+  pyY0   <- np$array(mY0, dtype = "float")
+  pyY1   <- np$array(mY1, dtype = "float")
   
-  return(list(phi1 = phi1, phi0 = phi0, tau_hat = mean(phi1) - mean(phi0)))
+  res.optim2_0 <- tryCatch(gp(pyX0, pyY0,
+                              degree1 = degree1,
+                              degree2 = degree2,
+                              k1 = k1,
+                              k2 = k2,
+                              operator = operator),
+                           error=function(e) NULL)
+  
+  res.optim2_1 <- tryCatch(gp(pyX1,pyY1,
+                              degree1 = degree1,
+                              degree2 = degree2,
+                              k1 = k1,
+                              k2 = k2,
+                              operator=operator),
+                           error=function(e) {print(e); NULL})
+  
+  #compute K
+  matrix_eva <- data.matrix( confounders )
+  # evaluation matrix
+  res.optim2_1$par <- exp(res.optim2_1$gpr$kernel_$theta)
+  res.optim2_0$par <- exp(res.optim2_0$gpr$kernel_$theta)
+  # Gram matrices
+  K1 <- res.optim2_1$gpr$kernel_(matrix_eva)
+  K0 <- res.optim2_0$gpr$kernel_(matrix_eva)
+  
+  p1 <- as.numeric(res.optim2_1$gpr$predict(matrix_eva))
+  p0 <- as.numeric(res.optim2_0$gpr$predict(matrix_eva))
+  
+  V <- rep(1/n, n)
+  
+  #Quadratic part
+  I1 <- diag( t1 )
+  I0 <- diag( t0 )
+  I1KI1 <- I1%*%K1%*%I1
+  I0KI0 <- I0%*%K0%*%I0
+  
+  KI1 <- diag(t1)%*%K1
+  KI0 <- diag(t0)%*%K0
+  
+  VKI1 <- t(V)%*%KI1
+  VKI0 <- t(V)%*%KI0
+  
+  tol <- 1e-08
+  
+  sigma1 <- res.optim2_1$par[3]^2
+  sigma0 <- res.optim2_0$par[3]^2
+  
+  Sigma <- sigma1*diag(t1) + sigma0*diag(t0)
+  #Update Q
+  Q <- (1/n^2)*( I1KI1 + I0KI0 + penal*Sigma )
+  
+  #Update c
+  c <- -2*(1/n^2)*(VKI1 + VKI0)
+  
+  rm(list = c("VKI1","VKI0"))
+  
+  model <- list()
+  model$A          <- matrix(c( t1/n ,t0/n), nrow=2, byrow=T)
+  model$rhs        <- c(1,1)
+  model$modelsense <- "min"
+  model$Q          <- Q
+  model$obj        <- c
+  model$sense      <- c("=")
+  model$lb <- rep(tol,n)
+  model$vtypes <- "C"
+  Dmat <- Q  # Symmetric positive-definite matrix for the quadratic term
+  dvec <- c  # Linear coefficients
+  Amat <- t(matrix(c(t1/n, t0/n), nrow = 2, byrow = TRUE))
+  # Amat <- t(matrix(rep(1, n), nrow = 1, byrow = TRUE))
+  bvec <- c(1, 1)  # Right-hand side values for the equality constraints
+  meq <- 2  # N
+  
+  params <- list(Presolve=2,OutputFlag=0,QCPDual=0)
+  
+  tryCatch({
+    res <- quadprog::solve.QP(Dmat = Dmat, dvec = dvec, Amat = Amat, bvec = bvec, meq = meq)
+  }, error = function(e) browser())
+  phi0 <- (1-data[[Tr]])*res$solution*(data[[Y]] - p0) + p0
+  phi1 <- (data[[Tr]])*res$solution*(data[[Y]] - p1) + p1
+  
+  return(list(phi1 = phi1, phi0 = phi0, tau_hat = mean(phi1 - phi0)))
+  
 }
+
+calculate_gamma <- function(n, subsets){
+  soln <- 1 - log(subsets)/log(n)
+  return(truncate_to_n(soln, 5))
+}
+
+causal_blb_aipw <- function(data, y, Tr, confounders, b, subsets, disjoint = TRUE, 
+                            weight_function = aipw_kernel_weights, balance_treated = FALSE, ...){
+  if(data.table::is.data.table(data) == FALSE){
+    data <- data.table::as.data.table(data)
+  }
+  n <- nrow(data)
+  partitions <- make_partition(n = n, subsets = subsets, b = b, disjoint = disjoint,
+                               balance_treated = balance_treated, treatment = data[[Tr]])
+  idx <- seq_len(b)
+  
+  blb_out <- lapply(partitions, function(i){
+    tmp_dat <- data[i]
+    main_args <- list(data = tmp_dat, Tr = Tr, Y = y, confounder_names = confounders)
+    output <- do.call(weight_function, c(main_args, list(...)))
+    
+    phi1 <- output$phi1
+    phi0 <- output$phi0
+    
+    M <- rmultinom(n = B, size = n, prob = rep(1, b))
+    blb_reps <- sapply(seq_len(B), function(bt){
+      boot_phi1 <- M[, bt]*phi1
+      boot_phi0 <- M[, bt]*phi0
+      sum(boot_phi1)/n - sum(boot_phi0)/n
+    })
+    
+    perc_ci <- boot:::perc.ci(blb_reps)
+    return(data.table(lower_ci = perc_ci[4],
+                      upper_ci = perc_ci[5],
+                      estim = mean(blb_reps),
+                      se = sd(blb_reps)))
+  })
+  
+  blb_out <- rbindlist(blb_out)
+  blb_out <- blb_out[, .(lower_ci = mean(lower_ci),
+                         upper_ci = mean(upper_ci),
+                         estim = mean(estim),
+                         se = mean(se))]
+  return(blb_out)
+}
+
+kangschafer3 <- function(n, te, sigma, beta_overlap = 0.5){
+  X1 <- rnorm(n, 0, 1)
+  X2 <- rnorm(n, 0, 1)
+  prt <- 1/(1 + exp(-beta_overlap*(X1 + X2)))
+  
+  Tr <- rbinom(n, 1, prt)
+  
+  Y0  <- X1 + X2 + rnorm(n, 0, sigma)
+  Y1  <- Y0 + te
+  y   <- Y0*(1-Tr) + Y1*(Tr)
+  out <- cbind(y, Tr, X1, X2, Y1, Y0)
+  out <- data.table::as.data.table(out)
+  return(out)
+}
+
+make_partition <- function(n,
+                           subsets,
+                           b,
+                           disjoint = TRUE,
+                           balance_treated = FALSE,
+                           treatment = NULL) {
+  part_idx <- seq_len(n)
+  totality <- b * subsets
+  stopifnot(totality <= n)
+  
+  if (balance_treated && !disjoint) {
+    stop("balance_treated = TRUE is only supported for disjoint = TRUE.")
+  }
+  
+  if (disjoint) {
+    if (!balance_treated) {
+      # Original disjoint logic
+      partition <- sample(part_idx, n)
+      partition <- partition[1:totality]
+      partition <- split(partition, f = rep(seq_len(subsets), each = b))
+    } else {
+      # New logic: ensure treated units are spread across subsets
+      if (is.null(treatment)) {
+        stop("When balance_treated = TRUE you must supply a 'treatment' vector of length n.")
+      }
+      if (length(treatment) != n) {
+        stop("'treatment' must have length n.")
+      }
+      
+      # Define treated units (non-zero / TRUE)
+      treated_idx <- which(as.logical(treatment))
+      untreated_idx <- setdiff(part_idx, treated_idx)
+      
+      if (length(treated_idx) < subsets) {
+        stop("Not enough treated units to place at least one in each subset.")
+      }
+      
+      if (length(treated_idx) > totality) {
+        stop("Number of treated units exceeds b * subsets; cannot fit all treated into subsets of size b.")
+      }
+      
+      # Randomly permute treated units
+      treated_idx <- sample(treated_idx)
+      
+      # Initialize list of subsets
+      partition <- vector("list", subsets)
+      
+      # First, spread treated units across subsets in a round-robin fashion
+      for (k in seq_along(treated_idx)) {
+        s <- ((k - 1L) %% subsets) + 1L
+        partition[[s]] <- c(partition[[s]], treated_idx[k])
+      }
+      
+      # Now fill remaining slots in each subset with untreated units
+      untreated_idx <- sample(untreated_idx)
+      
+      pos <- 1L
+      for (s in seq_len(subsets)) {
+        need <- b - length(partition[[s]])
+        if (need > 0L) {
+          if (pos + need - 1L > length(untreated_idx)) {
+            stop("Not enough remaining (untreated) units to fill all subsets to size b.")
+          }
+          partition[[s]] <- c(partition[[s]], untreated_idx[pos:(pos + need - 1L)])
+          pos <- pos + need
+        } else if (need < 0L) {
+          # Safety: if any subset somehow exceeded size b, truncate
+          partition[[s]] <- partition[[s]][seq_len(b)]
+        }
+      }
+      
+      # Final check: each subset must be exactly size b
+      stopifnot(all(vapply(partition, length, integer(1)) == b))
+    }
+  } else {
+    # Non-disjoint case, original behavior (balance_treated ignored)
+    partition <- replicate(subsets, {
+      sample(part_idx, size = b, replace = FALSE)
+    }, simplify = FALSE)
+  }
+  
+  partition
+}
+
+truncate_to_n <- function(number, n) {
+  factor <- 10^n
+  truncated <- trunc(number * factor) / factor
+  return(truncated)
+}
+
+zip_plots <- function(data, zip_labels, n, use_case, image_path, plot_title, te,
+                      type = 'full', text_x = 0.75, text_y = 50){
+  if(data.table::is.data.table(data) == FALSE){
+    data <- data.table::as.data.table(data)
+  }
+
+  nm_prefix <- paste0(use_case, '_zip_plot_n', n)
+  ggsub <- data[n == n]
+  label_sub <- zip_labels[n == n]
+  title <- bquote(paste(.(plot_title), ' ', n == .(n)))
+
+  # if(type == 'full'){
+  #   nm <- paste0(nm_prefix, '_full.pdf')
+  #   title <- bquote(paste(plot_title, ' ', n == .(n)))
+  #   ggsub <- data[n == n]
+  #   label_sub <- zip_labels[n == n]
+  #
+  # } else{
+  #   nm <- paste0(nm_prefix, '_subset_', subsets, '_gamma_', gamma, '_cblb.pdf')
+  #   title <- bquote(paste(.(plot_title), ' ', s == .(subsets), ' and ', gamma == .(gamma), ' and ', n == .(n)))
+  #   ggsub <- data[n == n & subsets == subsets & gamma == gamma]
+  #   label_sub <- zip_labels[n == n & subsets == subsets & gamma == gamma]
+  # }
+  nm <- paste0(nm_prefix, '_', type, '.pdf')
+  p <- ggplot2::ggplot(ggsub, ggplot2::aes(y = rank)) +
+    ggplot2::geom_segment(ggplot2::aes(x = lower_ci, y = rank, xend = upper_ci, yend = rank, color = covered)) +
+    ggplot2::geom_vline(ggplot2::aes(xintercept = te), color = 'yellow', size = 0.5, linetype = 'dashed') +
+    ggplot2::ylab('Fractional Centile of |z|') +
+    ggplot2::xlab('95% Confidence Intervals') +
+    ggplot2::theme_bw() +
+    ggplot2::scale_y_continuous(breaks = c(5, 50, 95)) +
+    ggplot2::scale_color_discrete(name = "Coverage") +
+    ggplot2::geom_text(x = text_x, y = text_y, ggplot2::aes(label = perc_cover), data = label_sub, size = 4) +
+    ggplot2::ggtitle(title)
+
+  if(type == 'full'){
+    p <- p + ggplot2::facet_grid(n ~ ., labeller = ggplot2::label_both)
+  } else{
+    p <- p + ggplot2::facet_grid(n ~ subsets, labeller = ggplot2::label_both)
+  }
+
+  ggplot2::ggsave(file.path(image_path, nm), plot = p, height = 9, width = 7)
+}
+
+zip_plots_helper <- function(data, type, te){
+  data[, `:=`(cent = abs(estim - te)/se)]
+  if(type == 'full'){
+    group_cols <- c('n')
+  } else{
+    group_cols <- c('n', 'gamma', 'subsets')
+  }
+  data[, `:=`(rank = as.integer(cut(cent, quantile(cent, probs = seq(0, 1, by = 0.01)), include.lowest = TRUE))),
+      by = group_cols]
+
+  data[, `:=`(n = format(n, scientific = FALSE, big.mark = ','),
+             covered = fifelse(lower_ci <= te & upper_ci >= te, 'Coverer', 'Non-coverer'))]
+  zip_labels <- data[, .(perc_cover = round(mean(covered == 'Coverer'), 3)), by = group_cols]
+
+  return(list(zip = data, zip_labels = zip_labels))
+}
+
+
+#### END NEW FUNCTIONS
+
+
+
+
+
+
+
+
+# parametric_weights <- function(data, Tr, Y, confounder_names, family_outcome = stats::gaussian, family_propensity = stats::binomial){
+#   
+#   if(data.table::is.data.table(data) == FALSE){
+#     data <- data.table::as.data.table(data)
+#   }
+#   intervention <- data[[Tr]]
+#   outcome <- data[[Y]]
+#   confounders <- data[, ..confounder_names]
+#   n <- nrow(data)
+#   
+#   # Create formula for models
+#   outcome_formula <- as.formula(paste0(Y, " ~ ", paste(confounder_names, collapse = " + ")))
+#   propensity_formula <- as.formula(paste0(Tr, " ~ ", paste(confounder_names, collapse = " + ")))
+# 
+#   # Fit propensity score model on all data
+#   e <- predict(glm(propensity_formula, data = data, family = family_propensity), 
+#             type = "response")
+#   
+#   # Fit outcome model m0 on control group, predict on all data
+#   m0 <- predict(glm(outcome_formula, subset = (intervention == 0), data = data, family = family_outcome),
+#             newdata = data, type = "response")
+#   
+#   # Fit outcome model m1 on treated group, predict on all data
+#   m1 <-  predict(glm(outcome_formula, subset = (intervention == 1), data = data, family = family_outcome),
+#             newdata = data, type = "response")
+#   
+#   # Compute phi1 and phi0 using standard AIPW formulas
+#   phi1 <- (intervention * outcome - (intervention - e) * m1) / e
+#   phi0 <- ((1 - intervention) * outcome - (intervention - e) * m0) / (1 - e)
+#   
+#   
+#   return(list(phi1 = phi1, phi0 = phi0, tau_hat = mean(phi1) - mean(phi0)))
+# }
 
 # aipw_kernel_weights_att_try <- function(data, Tr, Y, confounder_names, degree1, degree2, k1, k2, operator, penal, bootstrap_size=length(data),
 #                                 estimator=ate_estimator){
@@ -573,648 +591,634 @@ parametric_weights <- function(data, Tr, Y, confounder_names, family_outcome = s
 
 
 
-ate_estimator <- function(t1, n1, n) {
-  list(
-    V = rep(1/n, n),                                 
-    aggregate = function(phi1, phi0, t1, n1, n) mean(phi1 - phi0)  # ATE
-  )
-}
+# ate_estimator <- function(t1, n1, n) {
+#   list(
+#     V = rep(1/n, n),                                 
+#     aggregate = function(phi1, phi0, t1, n1, n) mean(phi1 - phi0)  # ATE
+#   )
+# }
+# 
+# att_estimator <- function(t1, n1, n) {
+#   list(
+#     V = as.numeric(t1) / n1,                          
+#     aggregate = function(phi1, phi0, t1, n1, n) sum((t1 / n1) * (phi1 - phi0))  # ATT
+#   )
+# }
+# 
+# aol_dgp <- function(n){
+#   # Copied from paper
+#   X <- lapply(1:5, function(i){
+#     dt <- data.frame(runif(n, -1, 1))
+#     names(dt) <- paste0('x', i)
+#     dt
+#   })
+#   X <- do.call(cbind, X)
+#   A <- ifelse(rbinom(n, size = 1, prob = 0.5) == 1, 1, -1)
+#   mu_y <- 0.5 + as.matrix(X) %*% c(0.5, 0.8, 0.3, -0.5, 0.7) + A*(0.2 - 0.6*X$x1 - 0.8*X$x2)
+#   y <- rnorm(n, mean = mu_y[, 1])
+#   X$y <- y
+#   X$A <- A
+#   return(X)
+# }
+# 
+# aol_loss <- function(params, X, A, r_tilde, K_matrix, lambda) {
+#   n <- length(A)
+#   v <- params[1:n]  # Extract v coefficients
+#   b <- params[n+1]   # Extract intercept
+#   
+#   f_x <- K_matrix %*% v + b
+#   
+#   hinge_loss <- huber_hinge(A * sign(r_tilde) * f_x)
+#   
+#   loss_term <- mean(abs(r_tilde) / 0.5 * hinge_loss)
+#   reg_term <- (lambda / 2) * sum(v %*% K_matrix %*% v)
+#   
+#   return(loss_term + reg_term)
+# }
+# 
+# box_plots <- function(full, cblb, use_case, title, image_dir){
+#   full[, `:=`(type = 'Full Bootstrap')]
+#   cblb[, `:=`(type = paste0('cBLB, subsets = ', subsets, ', gamma = ', gamma))]
+#   cblb[, `:=`(subsets = NULL, gamma = NULL)]
+#   timing_df <- data.table::rbindlist((list(cblb, full)))
+#   filename <- paste0(use_case, ".pdf")
+#   
+#   p <- ggplot2::ggplot(timing_df, ggplot2::aes(x = type, y = time_elapsed)) +
+#     ggplot2::geom_boxplot() +
+#     ggplot2::labs(
+#       title = paste0("Timing Results by Method, ", title),
+#       x = "Method",
+#       y = "Execution Time (seconds)"
+#     ) +
+#     ggplot2::theme_minimal() +
+#     ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1))
+#   
+#   ggplot2::ggsave(filename = file.path(image_dir, filename), plot = p, width = 8, height = 6)
+# }
+# 
 
-att_estimator <- function(t1, n1, n) {
-  list(
-    V = as.numeric(t1) / n1,                          
-    aggregate = function(phi1, phi0, t1, n1, n) sum((t1 / n1) * (phi1 - phi0))  # ATT
-  )
-}
+# 
+# causal_blb <- function(data, y, Tr, confounders, b, subsets, disjoint = TRUE, K = 10){
+#   if(data.table::is.data.table(data) == FALSE){
+#     data <- data.table::as.data.table(data)
+#   }
+#   n <- nrow(data)
+#   partitions <- make_partition(n = n, subsets = subsets, b = b, disjoint = disjoint)
+#   idx <- seq_len(b)
+#   
+#   blb_out <- lapply(partitions, function(i){
+#     tmp_dat <- data[i]
+#     folds <- split(idx, sample(rep(1:K, length.out = length(idx))))
+#     crossfit <- crossfit_estimator(data = tmp_dat, y = y, Tr = Tr, confounders = confounders,
+#                                    K = K)
+# 
+#     M <- rmultinom(n = B, size = n, prob = rep(1, b))
+#     blb_reps <- sapply(seq_len(B), function(bt){
+#       phi1 <- M[, bt]*((crossfit[[Tr]]/crossfit$prop_score)*(crossfit[[y]] - crossfit$m1) + crossfit$m1)
+#       phi0 <- M[, bt]*((1 - crossfit[[Tr]])/(1 - crossfit$prop_score)*(crossfit[[y]] - crossfit$m0) + crossfit$m0)
+#       sum(phi1)/n - sum(phi0)/n
+#     })
+#     
+#     perc_ci <- boot:::perc.ci(blb_reps)
+#     return(data.table(lower_ci = perc_ci[4],
+#                       upper_ci = perc_ci[5],
+#                       estim = mean(blb_reps),
+#                       se = sd(blb_reps)))
+#   })
+#   
+#   blb_out <- rbindlist(blb_out)
+#   blb_out <- blb_out[, .(lower_ci = mean(lower_ci),
+#                          upper_ci = mean(upper_ci),
+#                          estim = mean(estim),
+#                          se = mean(se))]
+#   return(blb_out)
+# }
+# 
+# 
+# 
+# causal_blb_policy <- function(data, y, A, b, subsets, lambda, initial_params, r_tilde_form, covariates,
+#                               disjoint = TRUE, boundary = 0){
+#   if(data.table::is.data.table(data) == FALSE){
+#     data <- data.table::as.data.table(data)
+#   }
+#   n <- nrow(data)
+#   partitions <- make_partition(n = n, subsets = subsets, b = b, disjoint = disjoint,
+#                                balance_treated = TRUE, treatment = data[[A]])
+#   idx <- seq_len(b)
+#   # convert to -1 to 1
+#   data[[A]] <- 2*data[[A]] - 1
+#   
+#   blb_out <- lapply(partitions, function(i){
+#     tmp_dat <- data[i]
+#     ps_dat <- copy(tmp_dat)
+#     ps_dat$A01 <- ifelse(ps_dat[[A]] == 1, 1, 0)
+#     ps_formula <- as.formula(
+#       paste("A01 ~", paste(covariates, collapse = " + "))
+#     )
+#     ps_fit <- glm(ps_formula, data = ps_dat, family = binomial)
+#     pi_1 <- predict(ps_fit, type = "response")
+#     pi_1 <- pmin(pmax(pi_1, 1e-6), 1 - 1e-6)
+#     pi_A <- ifelse(tmp_dat[[A]] == 1, pi_1, 1 - pi_1) 
+#     
+#     estim_opt_regime <- estimate_optimal_regime(data = tmp_dat, 
+#                                                 r_tilde_form = r_tilde_form, 
+#                                                 covariates = covariates, 
+#                                                 A = A,
+#                                                 y = y,
+#                                                 initial_params = initial_params, lambda = lambda,
+#                                                 boundary = boundary,
+#                                                 pi_1 = pi_1) 
+#     M <- rmultinom(n = B, size = n, prob = rep(1, b))
+# 
+#     blb_reps <- sapply(seq_len(B), function(bt){
+#       sum(M[, bt]*tmp_dat[[y]]/pi_A*(tmp_dat[[A]] == estim_opt_regime))/n
+#     })
+# 
+#     perc_ci <- boot:::perc.ci(blb_reps)
+#     return(data.table(lower_ci = perc_ci[4],
+#                       upper_ci = perc_ci[5],
+#                       estim = mean(blb_reps),
+#                       se = sd(blb_reps)))
+#   })
+#   
+#   blb_out <- rbindlist(blb_out)
+#   blb_out <- blb_out[, .(lower_ci = mean(lower_ci),
+#                          upper_ci = mean(upper_ci),
+#                          estim = mean(estim),
+#                          se = mean(se))]
+#   return(blb_out)
+# }
+# 
+# causal_blb_stable <- function(data, b, subsets, kernel_approx = TRUE, disjoint = TRUE, augment = FALSE,
+#                               delta.v = 1e-4, kernel_type = 'rbfdot', eig_clip = NULL){
+#   if(data.table::is.data.table(data) == FALSE){
+#     data <- data.table::as.data.table(data)
+#   }
+#   n <- nrow(data)
+#   partitions <- make_partition(n = n, subsets = subsets, b = b, disjoint = disjoint)
+#   idx <- seq_len(b)
+#   
+#   blb_out <- lapply(partitions, function(i){
+#     tmp_dat <- data[i]
+#     output <- osqp_kernel_sbw_twofit(X = as.matrix(tmp_dat[, c('X1', 'X2')]),
+#                                                    A = tmp_dat$Tr,
+#                                                    Y = tmp_dat$y,
+#                                                    delta.v=delta.v,
+#                                                    kernel.approximation = kernel_approx,
+#                                                    c = 100)
+#     
+#     weights0 <- output[[1]]$res0$x
+#     weights1 <- output[[1]]$res1$x
+#     tmp_dat$full_weights <- NA
+#     tmp_dat$full_weights[tmp_dat$Tr == 1] <- weights1
+#     tmp_dat$full_weights[tmp_dat$Tr == 0] <- weights0
+#     tmp_dat$full_weights <- tmp_dat$full_weights*b
+#     if(augment){
+#       m0 <- output[[1]]$m0
+#       m1 <- output[[1]]$m1
+#       
+#       phi1 <- (tmp_dat$Tr)*tmp_dat$full_weights*(tmp_dat$y - m1) + m1
+#       phi0 <- (1-tmp_dat$Tr)*tmp_dat$full_weights*(tmp_dat$y - m0) + m0
+#     } else{
+#       phi1 <- (tmp_dat$Tr)*tmp_dat$full_weights*(tmp_dat$y)
+#       phi0 <- (1-tmp_dat$Tr)*tmp_dat$full_weights*(tmp_dat$y)
+#     }
+# 
+#     M <- rmultinom(n = B, size = n, prob = rep(1, b))
+#     
+#     blb_reps <- sapply(seq_len(B), function(bt){
+#       boot_phi1 <- M[, bt]*phi1
+#       boot_phi0 <- M[, bt]*phi0
+#       sum(boot_phi1)/n - sum(boot_phi0)/n
+#     })
+#     
+#     perc_ci <- boot:::perc.ci(blb_reps)
+#     return(data.table(lower_ci = perc_ci[4],
+#                       upper_ci = perc_ci[5],
+#                       estim = mean(blb_reps),
+#                       se = sd(blb_reps)))
+#   })
+#   
+#   blb_out <- rbindlist(blb_out)
+#   blb_out <- blb_out[, .(lower_ci = mean(lower_ci),
+#                          upper_ci = mean(upper_ci),
+#                          estim = mean(estim),
+#                          se = mean(se))]
+#   return(blb_out)
+# }
+# 
+# crossfit_estimator <- function(data, y, Tr, confounders, K = 10){
+#   if(data.table::is.data.table(data) == FALSE){
+#     data <- data.table::as.data.table(data)
+#   }
+#   
+#   fold_idx <- seq_len(nrow(data))
+#   folds <- split(fold_idx, sample(rep(1:K, length.out = length(fold_idx))))
+#   
+#   m_formula <- as.formula(paste0(y, ' ~ ', Tr, ' + ', paste(confounders, collapse = ' + ')))
+#   g_formula <- as.formula(paste0(Tr, ' ~ ', paste(confounders, collapse = ' + ')))
+#   
+#   crossfit_dt <- lapply(folds, function(test_idx){
+#     train_idx <- setdiff(fold_idx, test_idx)
+#     train_dat <- data[train_idx]
+#     test_dat <- data[-train_idx]
+#     
+#     m <- e1071::svm(m_formula, data = train_dat, kernel = 'linear', type = 'eps-regression')
+#     g <- e1071::svm(g_formula, data = train_dat, kernel = 'linear', type = 'C-classification', probability = TRUE)
+#     
+#     prop_score <- attr(predict(g, newdata = test_dat, probability = TRUE), 'probabilities')[, 1]
+#     
+#     confounder_data <- test_dat[, ..confounders]
+#     newdata_1 <- data.frame(setNames(list(1), Tr), confounder_data)
+#     newdata_0 <- data.frame(setNames(list(0), Tr), confounder_data)
+#     
+#     m1 <- predict(m, newdata = newdata_1)
+#     m0 <- predict(m, newdata = newdata_0)
+#     
+#     test_dat$prop_score <- prop_score
+#     test_dat$m1 <- m1
+#     test_dat$m0 <- m0
+#     
+#     test_dat
+#   })
+#   return(rbindlist(crossfit_dt))
+# }
+# 
+# estimate_optimal_regime <- function(data, r_tilde_form, covariates, A, y, initial_params, lambda,
+#                                     boundary = 0, pi_1){
+#   
+#   if(data.table::is.data.table(data) == FALSE){
+#     data <- data.table::as.data.table(data)
+#   }
+#   
+#   num_params <- nrow(data)
+#   X <- data[, c(covariates), with = FALSE]
+#   Aval <- data[[A]]
+#   K_matrix <- kernlab::kernelMatrix(kernlab::vanilladot(), data.matrix(X))
+#   r_tilde <- train_aol(dat = data, formula = r_tilde_form, A = A, y = y, pi_1 = pi_1)
+#   
+#   opt_result <- optim(
+#     par = initial_params,
+#     fn = aol_loss,
+#     X = X,
+#     A = Aval,
+#     r_tilde = r_tilde,
+#     K_matrix = K_matrix,
+#     lambda = lambda,
+#     method = "L-BFGS-B"
+#   )
+#   
+#   # Extract optimized parameters
+#   v_opt <- opt_result$par[1:num_params]
+#   b_opt <- opt_result$par[num_params + 1]
+#   decision_boundary <- K_matrix %*% v_opt + b_opt
+#   estim_opt_regime <- ifelse(decision_boundary > boundary, 1, -1)
+#   return(estim_opt_regime)
+# }
+# 
+# huber_hinge <- function(u, delta = 1) {
+#   ifelse(u >= 1, 0, ifelse(u >= -1, (1 - u)^2 / 4, -u))
+# }
+# 
+# 
+# 
+# # kernel.basis <- function(X,A,Y, 
+# #                          kernel.approximation=TRUE,
+# #                          dim.reduction=FALSE,
+# #                          c = NULL, l=NULL, s=NULL, gamma=NULL, U.mat = NULL,
+# #                          kernel_type = 'rbfdot', eig_clip = NULL) {
+# #   n <- nrow(X)
+# #   if (kernel.approximation) {
+# #     if (is.null(c)) {
+# #       # use some heuristics for choice of c 
+# #       c = ifelse(n<1e+5, 100, 250) 
+# #     }
+# #     if (is.null(l)) {
+# #       # set arbitrarily similar to Wang, 2019  
+# #       l=round(c/2)
+# #       s=round(l/2)
+# #     }
+# #     if (is.null(gamma)) {
+# #       # heuristics by Hazlett, 2020  
+# #       gamma = 1/(2*ncol(X)) 
+# #     }
+# #     
+# #     set_c = sample(x = 1:n, size = c, replace = FALSE)
+# #     set_c = sort(set_c)
+# #     X <- scale(X)
+# #     # --------------------------------------------------------
+# #     # # slow version:  
+# #     # f <- function(x,y) sum(x*y)
+# #     # C <- outer(
+# #     #   1:n, set_c,
+# #     #   Vectorize( function(i,j) f(X[i,], X[j,]) )
+# #     # )
+# #     # --------------------------------------------------------
+# #     # C <- RBF_kernel_C(X, c, set_c)
+# #     C <- RBF_kernel_C_parallel(X, c, set_c)
+# #     # --------------------------------------------------------
+# #     W <- C[set_c,]
+# #     SVD_W <- RSpectra::svds(A=W, k=l)
+# #     if (dim.reduction) {
+# #       R <- C %*% SVD_W$u %*% diag(1/sqrt(SVD_W$d))
+# #       SVD_R <- svds(A=R, k=s) 
+# #       X_ <- R %*% SVD_R$v # B
+# #     } else {
+# #       X_ <- C %*% SVD_W$u # %*% diag(1/SVD_W$d)
+# #       # lambda_ <- 1/SVD_W$d
+# #     }
+# #   } else{
+# #     # O(n^2) spoce-, O(n^3) time-complexity
+# #     gram.mat <- makeK_noparallel(X, kernel_type = kernel_type)
+# #     res = RSpectra::eigs_sym(gram.mat, c, which = "LM")
+# #     # CLIP NEGATIVE
+# #     if(!is.null(eig_clip)){
+# #       res$values[res$values < eig_clip] <- eig_clip
+# #     }
+# #     X_ <- if(is.null(U.mat)) {
+# #       res$vectors %*% diag(1/sqrt(res$values))
+# #     } else{
+# #       U.mat %*% diag(1/sqrt(res$values))
+# #     }
+# #   }
+# #   return(X_)
+# # }
+# 
+# # makeK_noparallel <- function(allx, useasbases=NULL, b=NULL, linkernel = FALSE, scale = TRUE,
+# #                              kernel_type = 'rbfdot'){
+# #   N=nrow(allx)
+# #   # If no "useasbasis" given, assume all observations are to be used.
+# #   if(is.null(useasbases)) {useasbases = rep(1, N)}
+# #   
+# #   #default b is set to 2ncol to match kbal for now
+# #   if (is.null(b)){ b=2*ncol(allx) }
+# #   
+# #   if(scale) {
+# #     allx = scale(allx)
+# #   } 
+# #   bases = allx[useasbases==1, ]
+# #   
+# #   if (linkernel == TRUE) {
+# #     K <- allx  # Linear kernel case
+# #   } else {
+# #     if (sum(useasbases) == N) {
+# #       if (kernel_type == "rbfdot") {
+# #         K <- kernlab::kernelMatrix(kernlab::rbfdot(), allx)
+# #       } else if (kernel_type == "vanilladot") {
+# #         K <- kernlab::kernelMatrix(kernlab::vanilladot(), allx)
+# #       } else {
+# #         stop("Invalid kernel_type. Choose 'rbfdot' or 'vanilladot'.")
+# #       }
+# #     } 
+# #   }
+# #   return(K)
+# # }
+# 
+# # make_partition <- function(n, subsets, b, disjoint = TRUE){
+# #   part_idx <- seq(1, n, by = 1)
+# #   if(disjoint){
+# #     # Generate disjoint sets
+# #     # Permute indices
+# #     partition <- sample(part_idx, n)
+# #     totality <- b*subsets
+# #     stopifnot(totality <= n)
+# #     # Exclude rest of sample
+# #     partition <- partition[1:totality]
+# #     partition <- split(partition, f = rep(1:subsets, each = b))
+# #   } else{
+# #     partition <- replicate(subsets, {
+# #       sample(part_idx, size = b, replace = FALSE)
+# #     }, simplify = FALSE)
+# #   }
+# #   partition
+# # }
+# 
+# make_partition <- function(n,
+#                            subsets,
+#                            b,
+#                            disjoint = TRUE,
+#                            balance_treated = FALSE,
+#                            treatment = NULL) {
+#   part_idx <- seq_len(n)
+#   totality <- b * subsets
+#   stopifnot(totality <= n)
+#   
+#   if (balance_treated && !disjoint) {
+#     stop("balance_treated = TRUE is only supported for disjoint = TRUE.")
+#   }
+#   
+#   if (disjoint) {
+#     if (!balance_treated) {
+#       # Original disjoint logic
+#       partition <- sample(part_idx, n)
+#       partition <- partition[1:totality]
+#       partition <- split(partition, f = rep(seq_len(subsets), each = b))
+#     } else {
+#       # New logic: ensure treated units are spread across subsets
+#       if (is.null(treatment)) {
+#         stop("When balance_treated = TRUE you must supply a 'treatment' vector of length n.")
+#       }
+#       if (length(treatment) != n) {
+#         stop("'treatment' must have length n.")
+#       }
+#       
+#       # Define treated units (non-zero / TRUE)
+#       treated_idx <- which(as.logical(treatment))
+#       untreated_idx <- setdiff(part_idx, treated_idx)
+#       
+#       if (length(treated_idx) < subsets) {
+#         stop("Not enough treated units to place at least one in each subset.")
+#       }
+# 
+#       if (length(treated_idx) > totality) {
+#         stop("Number of treated units exceeds b * subsets; cannot fit all treated into subsets of size b.")
+#       }
+#       
+#       # Randomly permute treated units
+#       treated_idx <- sample(treated_idx)
+#       
+#       # Initialize list of subsets
+#       partition <- vector("list", subsets)
+#       
+#       # First, spread treated units across subsets in a round-robin fashion
+#       for (k in seq_along(treated_idx)) {
+#         s <- ((k - 1L) %% subsets) + 1L
+#         partition[[s]] <- c(partition[[s]], treated_idx[k])
+#       }
+#       
+#       # Now fill remaining slots in each subset with untreated units
+#       untreated_idx <- sample(untreated_idx)
+#       
+#       pos <- 1L
+#       for (s in seq_len(subsets)) {
+#         need <- b - length(partition[[s]])
+#         if (need > 0L) {
+#           if (pos + need - 1L > length(untreated_idx)) {
+#             stop("Not enough remaining (untreated) units to fill all subsets to size b.")
+#           }
+#           partition[[s]] <- c(partition[[s]], untreated_idx[pos:(pos + need - 1L)])
+#           pos <- pos + need
+#         } else if (need < 0L) {
+#           # Safety: if any subset somehow exceeded size b, truncate
+#           partition[[s]] <- partition[[s]][seq_len(b)]
+#         }
+#       }
+#       
+#       # Final check: each subset must be exactly size b
+#       stopifnot(all(vapply(partition, length, integer(1)) == b))
+#     }
+#   } else {
+#     # Non-disjoint case, original behavior (balance_treated ignored)
+#     partition <- replicate(subsets, {
+#       sample(part_idx, size = b, replace = FALSE)
+#     }, simplify = FALSE)
+#   }
+#   
+#   partition
+# }
+# 
+# 
+# 
+# # From JOSE paper
+# osqp_kernel_sbw_twofit <- function(X,A,Y,
+#                                    delta.v=0.005, 
+#                                    X_=NULL,
+#                                    osqp.setting=NULL,
+#                                    basis="kernel", kernel.approximation=TRUE,
+#                                    c = NULL, l=NULL, gamma=NULL, U.mat = NULL,
+#                                    dim.reduction=FALSE, s=NULL,
+#                                    K=2, interactions=FALSE, kernel_type = 'rbfdot',
+#                                    eig_clip = NULL) {
+#   
+#   #------------------------------------------------------------------------------------------
+#   # @X: covariates (n x d matrix)
+#   # @A: treatment (n x 1 vector)
+#   # @Y: outcome (n x 1 vector)
+#   # @X_: the basis matrix where (approximate) mean balancing between the treated and control groups is to be achieved
+#   #      (ncol(X_) = n)
+#   # @osqp.setting: osqp settings
+#   # @delta.v: tolerance level (either a single number or a numeric vector);
+#   #           the numeric vector is used for multiple iterations, each with different tolerance level
+#   # @basis: support kernel- or power series- (moment-) based constructions
+#   # + kernel basis (basis=='kernel')
+#   #     @kernel.approximation: if TRUE, use the Nystrom kernel approximation method proposed in \insertRef{wang2019scalable}
+#   #                            if FALSE, use the full gram matrix to compute eigenvectors as in \insertRef{hazlett2018}
+#   #     @c: sketch size for the standard Nystrom approximation. 
+#   #     @l: regularization parameter l < c. 
+#   #     @s: target rank for s < l the rank-restricted Nyström approximation
+#   #     @gamma: RBK parameter; set default value as 1/(2*dim(X))
+#   #     @U.mat: externel input for nxc eigenvector matrix; only used when kernel.approximation==FALSE
+#   # + power series basis (basis=='power')
+#   #     @K: use up to the K-th moment
+#   #     @interactions: add up to the K-th order interaction terms if TRUE
+#   #------------------------------------------------------------------------------------------
+#   
+#   
+#   res.list <- list()
+#   if (is.null(X_)) {
+#     if (basis=="kernel"){
+#       X_ <- kernel.basis(X,A,Y, 
+#                          kernel.approximation=kernel.approximation, 
+#                          c=c, l=l, gamma=gamma, U.mat=U.mat,
+#                          s=s, dim.reduction=dim.reduction, kernel_type = kernel_type,
+#                          eig_clip = eig_clip)
+#     } 
+#     
+#     else if (basis=="power") {
+#       X_ <- power.basis(X,A,Y, 
+#                         K=K, interactions=interactions)
+#     } 
+#     
+#     else {
+#       stop("not available yet")
+#     }
+#   }
+#   
+#   nX <- ncol(X_)
+#   n1 <- sum(A); n0 <- sum(1-A)
+#   Xt <- X_[A==1,]; Xc <- X_[A==0,]
+#   Yt <- Y[A==1]; Yc <- Y[A==0]
+#   
+#   # Xc_df <- as.data.frame(Xc)
+#   # Xt_df <- as.data.frame(Xt)
+#   # model_c <- lm(Yc ~ ., data = Xc_df)
+#   # model_t <- lm(Yt ~ ., data = Xt_df)
+#   # 
+#   # X_df <- as.data.frame(X_)
+#   # colnames(X_df) <- colnames(Xt_df)
+#   # 
+#   # m0 <- predict(model_c, newdata = X_df)
+#   # m1 <- predict(model_t, newdata = X_df)
+#   m0 <- 0
+#   m1 <- 1
+#   
+#   P.mat0 <- as(Matrix::.symDiagonal(n=n0, x=1.), "dgCMatrix")
+#   q.vec0 <- rep(-1./n0,n0)
+#   
+#   P.mat1 <- as(Matrix::.symDiagonal(n=n1, x=1.), "dgCMatrix")
+#   q.vec1 <- rep(-1./n1,n1)
+#   
+#   A.mat0 <- Matrix::Matrix(rbind(rep(1.,n0),
+#                                  P.mat0,
+#                                  t(Xc)), sparse = TRUE)
+#   A.mat1 <- Matrix::Matrix(rbind(rep(1.,n1),
+#                                  P.mat1,
+#                                  t(Xt)), sparse = TRUE)
+#   
+#   if (is.null(osqp.setting)) {
+#     # use default one
+#     settings <- osqp::osqpSettings(alpha = 1.5, verbose = FALSE)  
+#   } else {
+#     settings <- osqp.setting
+#   }
+#   
+#   for (j in 1:length(delta.v)) {
+#     l.vec0 <- c(1., rep(0.,n0),
+#                 colMeans(X_) - delta.v[j] * rep(1,nX))
+#     u.vec0 <- c(1., rep(1.,n0),
+#                 colMeans(X_) + delta.v[j] * rep(1,nX))
+#     
+#     l.vec1 <- c(1., rep(0.,n1),
+#                 colMeans(X_) - delta.v[j] * rep(1,nX))
+#     u.vec1 <- c(1., rep(1.,n1),
+#                 colMeans(X_) + delta.v[j] * rep(1,nX))
+#     if (j==1) {
+#       model0 <- osqp::osqp(P.mat0, q.vec0, A.mat0, l.vec0, u.vec0, settings)
+#       model1 <- osqp::osqp(P.mat1, q.vec1, A.mat1, l.vec1, u.vec1, settings)
+#     } else {
+#       model$Update(l = l.vec, u = u.vec)
+#     }
+#     res0 <- model0$Solve()
+#     res1 <- model1$Solve()
+#     # if (res$info$status != "solved") {
+#     #   warning(res$info$status)
+#     # }
+#     res.list[[j]] <- list(res0 = res0, res1 = res1, m0 = m0, m1 = m1)
+#   }
+#   return(res.list)
+# }
+# 
+# train_aol <- function(dat, formula, A, y, pi_1){
+#   # mu_y <- lm(y ~ x1 + x2 + x3 + x4 + x5 + A + A:x1 + A:x2, data = dat)
+#   mu_y <- lm(as.formula(formula), data = dat)
+#   
+#   pred_dat <- copy(dat)
+#   pred_dat[[A]] <- -1
+#   mu_y0 <- predict(mu_y, pred_dat)
+#   
+#   pred_dat <- copy(dat)
+#   pred_dat[[A]] <- 1
+#   mu_y1 <- predict(mu_y, pred_dat)
+#   
+#   pi_1 <- pmin(pmax(pi_1, 1e-6), 1 - 1e-6)
+#   pi_0 <- 1 - pi_1
+#   
+#   # Replace 0.5*µ0 + 0.5*µ1 with π0*µ0 + π1*µ1
+#   g_tilde <- dat[[y]] - (pi_0 * mu_y0 + pi_1 * mu_y1)
+#   
+#   return(g_tilde)
+# }
+# 
 
-aol_dgp <- function(n){
-  # Copied from paper
-  X <- lapply(1:5, function(i){
-    dt <- data.frame(runif(n, -1, 1))
-    names(dt) <- paste0('x', i)
-    dt
-  })
-  X <- do.call(cbind, X)
-  A <- ifelse(rbinom(n, size = 1, prob = 0.5) == 1, 1, -1)
-  mu_y <- 0.5 + as.matrix(X) %*% c(0.5, 0.8, 0.3, -0.5, 0.7) + A*(0.2 - 0.6*X$x1 - 0.8*X$x2)
-  y <- rnorm(n, mean = mu_y[, 1])
-  X$y <- y
-  X$A <- A
-  return(X)
-}
-
-aol_loss <- function(params, X, A, r_tilde, K_matrix, lambda) {
-  n <- length(A)
-  v <- params[1:n]  # Extract v coefficients
-  b <- params[n+1]   # Extract intercept
-  
-  f_x <- K_matrix %*% v + b
-  
-  hinge_loss <- huber_hinge(A * sign(r_tilde) * f_x)
-  
-  loss_term <- mean(abs(r_tilde) / 0.5 * hinge_loss)
-  reg_term <- (lambda / 2) * sum(v %*% K_matrix %*% v)
-  
-  return(loss_term + reg_term)
-}
-
-box_plots <- function(full, cblb, use_case, title, image_dir){
-  full[, `:=`(type = 'Full Bootstrap')]
-  cblb[, `:=`(type = paste0('cBLB, subsets = ', subsets, ', gamma = ', gamma))]
-  cblb[, `:=`(subsets = NULL, gamma = NULL)]
-  timing_df <- data.table::rbindlist((list(cblb, full)))
-  filename <- paste0(use_case, ".pdf")
-  
-  p <- ggplot2::ggplot(timing_df, ggplot2::aes(x = type, y = time_elapsed)) +
-    ggplot2::geom_boxplot() +
-    ggplot2::labs(
-      title = paste0("Timing Results by Method, ", title),
-      x = "Method",
-      y = "Execution Time (seconds)"
-    ) +
-    ggplot2::theme_minimal() +
-    ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1))
-  
-  ggplot2::ggsave(filename = file.path(image_dir, filename), plot = p, width = 8, height = 6)
-}
-
-calculate_gamma <- function(n, subsets){
-  soln <- 1 - log(subsets)/log(n)
-  return(truncate_to_n(soln, 5))
-}
-
-causal_blb <- function(data, y, Tr, confounders, b, subsets, disjoint = TRUE, K = 10){
-  if(data.table::is.data.table(data) == FALSE){
-    data <- data.table::as.data.table(data)
-  }
-  n <- nrow(data)
-  partitions <- make_partition(n = n, subsets = subsets, b = b, disjoint = disjoint)
-  idx <- seq_len(b)
-  
-  blb_out <- lapply(partitions, function(i){
-    tmp_dat <- data[i]
-    folds <- split(idx, sample(rep(1:K, length.out = length(idx))))
-    crossfit <- crossfit_estimator(data = tmp_dat, y = y, Tr = Tr, confounders = confounders,
-                                   K = K)
-
-    M <- rmultinom(n = B, size = n, prob = rep(1, b))
-    blb_reps <- sapply(seq_len(B), function(bt){
-      phi1 <- M[, bt]*((crossfit[[Tr]]/crossfit$prop_score)*(crossfit[[y]] - crossfit$m1) + crossfit$m1)
-      phi0 <- M[, bt]*((1 - crossfit[[Tr]])/(1 - crossfit$prop_score)*(crossfit[[y]] - crossfit$m0) + crossfit$m0)
-      sum(phi1)/n - sum(phi0)/n
-    })
-    
-    perc_ci <- boot:::perc.ci(blb_reps)
-    return(data.table(lower_ci = perc_ci[4],
-                      upper_ci = perc_ci[5],
-                      estim = mean(blb_reps),
-                      se = sd(blb_reps)))
-  })
-  
-  blb_out <- rbindlist(blb_out)
-  blb_out <- blb_out[, .(lower_ci = mean(lower_ci),
-                         upper_ci = mean(upper_ci),
-                         estim = mean(estim),
-                         se = mean(se))]
-  return(blb_out)
-}
-
-causal_blb_aipw <- function(data, y, Tr, confounders, b, subsets, disjoint = TRUE, 
-                            weight_function = aipw_kernel_weights, ...){
-  if(data.table::is.data.table(data) == FALSE){
-    data <- data.table::as.data.table(data)
-  }
-  n <- nrow(data)
-  partitions <- make_partition(n = n, subsets = subsets, b = b, disjoint = disjoint)
-  idx <- seq_len(b)
-  
-  blb_out <- lapply(partitions, function(i){
-    tmp_dat <- data[i]
-    main_args <- list(data = tmp_dat, Tr = Tr, Y = y, confounder_names = confounders)
-    output <- do.call(weight_function, c(main_args, list(...)))
-
-    phi1 <- output$phi1
-    phi0 <- output$phi0
-    
-    M <- rmultinom(n = B, size = n, prob = rep(1, b))
-    blb_reps <- sapply(seq_len(B), function(bt){
-      boot_phi1 <- M[, bt]*phi1
-      boot_phi0 <- M[, bt]*phi0
-      sum(boot_phi1)/n - sum(boot_phi0)/n
-    })
-    
-    perc_ci <- boot:::perc.ci(blb_reps)
-    return(data.table(lower_ci = perc_ci[4],
-                      upper_ci = perc_ci[5],
-                      estim = mean(blb_reps),
-                      se = sd(blb_reps)))
-  })
-  
-  blb_out <- rbindlist(blb_out)
-  browser()
-  blb_out <- blb_out[, .(lower_ci = mean(lower_ci),
-                         upper_ci = mean(upper_ci),
-                         estim = mean(estim),
-                         se = mean(se))]
-  return(blb_out)
-}
-
-causal_blb_policy <- function(data, y, A, b, subsets, lambda, initial_params, r_tilde_form, covariates,
-                              disjoint = TRUE, boundary = 0){
-  if(data.table::is.data.table(data) == FALSE){
-    data <- data.table::as.data.table(data)
-  }
-  n <- nrow(data)
-  partitions <- make_partition(n = n, subsets = subsets, b = b, disjoint = disjoint)
-  idx <- seq_len(b)
-  
-  blb_out <- lapply(partitions, function(i){
-    tmp_dat <- data[i]
-    estim_opt_regime <- estimate_optimal_regime(data = tmp_dat, 
-                                                r_tilde_form = r_tilde_form, 
-                                                covariates = covariates, 
-                                                A = A,
-                                                y = y,
-                                                initial_params = initial_params, lambda = lambda,
-                                                boundary = boundary) 
-    M <- rmultinom(n = B, size = n, prob = rep(1, b))
-
-    blb_reps <- sapply(seq_len(B), function(bt){
-      sum(M[, bt]*tmp_dat[[y]]/0.5*(tmp_dat[[A]] == estim_opt_regime))/n
-    })
-    
-    perc_ci <- boot:::perc.ci(blb_reps)
-    return(data.table(lower_ci = perc_ci[4],
-                      upper_ci = perc_ci[5],
-                      estim = mean(blb_reps),
-                      se = sd(blb_reps)))
-  })
-  
-  blb_out <- rbindlist(blb_out)
-  blb_out <- blb_out[, .(lower_ci = mean(lower_ci),
-                         upper_ci = mean(upper_ci),
-                         estim = mean(estim),
-                         se = mean(se))]
-  return(blb_out)
-}
-
-causal_blb_stable <- function(data, b, subsets, kernel_approx = TRUE, disjoint = TRUE, augment = FALSE,
-                              delta.v = 1e-4, kernel_type = 'rbfdot', eig_clip = NULL){
-  if(data.table::is.data.table(data) == FALSE){
-    data <- data.table::as.data.table(data)
-  }
-  n <- nrow(data)
-  partitions <- make_partition(n = n, subsets = subsets, b = b, disjoint = disjoint)
-  idx <- seq_len(b)
-  
-  blb_out <- lapply(partitions, function(i){
-    tmp_dat <- data[i]
-    output <- osqp_kernel_sbw_twofit(X = as.matrix(tmp_dat[, c('X1', 'X2')]),
-                                                   A = tmp_dat$Tr,
-                                                   Y = tmp_dat$y,
-                                                   delta.v=delta.v,
-                                                   kernel.approximation = kernel_approx,
-                                                   c = 100)
-    
-    weights0 <- output[[1]]$res0$x
-    weights1 <- output[[1]]$res1$x
-    tmp_dat$full_weights <- NA
-    tmp_dat$full_weights[tmp_dat$Tr == 1] <- weights1
-    tmp_dat$full_weights[tmp_dat$Tr == 0] <- weights0
-    tmp_dat$full_weights <- tmp_dat$full_weights*b
-    if(augment){
-      m0 <- output[[1]]$m0
-      m1 <- output[[1]]$m1
-      
-      phi1 <- (tmp_dat$Tr)*tmp_dat$full_weights*(tmp_dat$y - m1) + m1
-      phi0 <- (1-tmp_dat$Tr)*tmp_dat$full_weights*(tmp_dat$y - m0) + m0
-    } else{
-      phi1 <- (tmp_dat$Tr)*tmp_dat$full_weights*(tmp_dat$y)
-      phi0 <- (1-tmp_dat$Tr)*tmp_dat$full_weights*(tmp_dat$y)
-    }
-
-    M <- rmultinom(n = B, size = n, prob = rep(1, b))
-    
-    blb_reps <- sapply(seq_len(B), function(bt){
-      boot_phi1 <- M[, bt]*phi1
-      boot_phi0 <- M[, bt]*phi0
-      sum(boot_phi1)/n - sum(boot_phi0)/n
-    })
-    
-    perc_ci <- boot:::perc.ci(blb_reps)
-    return(data.table(lower_ci = perc_ci[4],
-                      upper_ci = perc_ci[5],
-                      estim = mean(blb_reps),
-                      se = sd(blb_reps)))
-  })
-  
-  blb_out <- rbindlist(blb_out)
-  blb_out <- blb_out[, .(lower_ci = mean(lower_ci),
-                         upper_ci = mean(upper_ci),
-                         estim = mean(estim),
-                         se = mean(se))]
-  return(blb_out)
-}
-
-crossfit_estimator <- function(data, y, Tr, confounders, K = 10){
-  if(data.table::is.data.table(data) == FALSE){
-    data <- data.table::as.data.table(data)
-  }
-  
-  fold_idx <- seq_len(nrow(data))
-  folds <- split(fold_idx, sample(rep(1:K, length.out = length(fold_idx))))
-  
-  m_formula <- as.formula(paste0(y, ' ~ ', Tr, ' + ', paste(confounders, collapse = ' + ')))
-  g_formula <- as.formula(paste0(Tr, ' ~ ', paste(confounders, collapse = ' + ')))
-  
-  crossfit_dt <- lapply(folds, function(test_idx){
-    train_idx <- setdiff(fold_idx, test_idx)
-    train_dat <- data[train_idx]
-    test_dat <- data[-train_idx]
-    
-    m <- e1071::svm(m_formula, data = train_dat, kernel = 'linear', type = 'eps-regression')
-    g <- e1071::svm(g_formula, data = train_dat, kernel = 'linear', type = 'C-classification', probability = TRUE)
-    
-    prop_score <- attr(predict(g, newdata = test_dat, probability = TRUE), 'probabilities')[, 1]
-    
-    confounder_data <- test_dat[, ..confounders]
-    newdata_1 <- data.frame(setNames(list(1), Tr), confounder_data)
-    newdata_0 <- data.frame(setNames(list(0), Tr), confounder_data)
-    
-    m1 <- predict(m, newdata = newdata_1)
-    m0 <- predict(m, newdata = newdata_0)
-    
-    test_dat$prop_score <- prop_score
-    test_dat$m1 <- m1
-    test_dat$m0 <- m0
-    
-    test_dat
-  })
-  return(rbindlist(crossfit_dt))
-}
-
-estimate_optimal_regime <- function(data, r_tilde_form, covariates, A, y, initial_params, lambda,
-                                    boundary = 0){
-  
-  if(data.table::is.data.table(data) == FALSE){
-    data <- data.table::as.data.table(data)
-  }
-  
-  num_params <- nrow(data)
-  X <- data[, c(covariates), with = FALSE]
-  Aval <- data[[A]]
-  K_matrix <- kernlab::kernelMatrix(kernlab::vanilladot(), as.matrix(X))
-  r_tilde <- train_aol(dat = data, formula = r_tilde_form, A = A, y = y)
-  
-  opt_result <- optim(
-    par = initial_params,
-    fn = aol_loss,
-    X = X,
-    A = Aval,
-    r_tilde = r_tilde,
-    K_matrix = K_matrix,
-    lambda = lambda,
-    method = "L-BFGS-B"
-  )
-  
-  # Extract optimized parameters
-  v_opt <- opt_result$par[1:num_params]
-  b_opt <- opt_result$par[num_params + 1]
-  decision_boundary <- K_matrix %*% v_opt + b_opt
-  estim_opt_regime <- ifelse(decision_boundary > boundary, 1, -1)
-  return(estim_opt_regime)
-}
-
-huber_hinge <- function(u, delta = 1) {
-  ifelse(u >= 1, 0, ifelse(u >= -1, (1 - u)^2 / 4, -u))
-}
-
-kangschafer3 <- function(n, te, sigma, beta_overlap = 0.5){
-  X1 <- rnorm(n, 0, 1)
-  X2 <- rnorm(n, 0, 1)
-  prt <- 1/(1 + exp(-beta_overlap*(X1 + X2)))
-  
-  Tr <- rbinom(n, 1, prt)
-  
-  Y0  <- X1 + X2 + rnorm(n, 0, sigma)
-  Y1  <- Y0 + te
-  y   <- Y0*(1-Tr) + Y1*(Tr)
-  out <- cbind(y, Tr, X1, X2, Y1, Y0)
-  out <- data.table::as.data.table(out)
-  return(out)
-}
-
-kernel.basis <- function(X,A,Y, 
-                         kernel.approximation=TRUE,
-                         dim.reduction=FALSE,
-                         c = NULL, l=NULL, s=NULL, gamma=NULL, U.mat = NULL,
-                         kernel_type = 'rbfdot', eig_clip = NULL) {
-  n <- nrow(X)
-  if (kernel.approximation) {
-    if (is.null(c)) {
-      # use some heuristics for choice of c 
-      c = ifelse(n<1e+5, 100, 250) 
-    }
-    if (is.null(l)) {
-      # set arbitrarily similar to Wang, 2019  
-      l=round(c/2)
-      s=round(l/2)
-    }
-    if (is.null(gamma)) {
-      # heuristics by Hazlett, 2020  
-      gamma = 1/(2*ncol(X)) 
-    }
-    
-    set_c = sample(x = 1:n, size = c, replace = FALSE)
-    set_c = sort(set_c)
-    X <- scale(X)
-    # --------------------------------------------------------
-    # # slow version:  
-    # f <- function(x,y) sum(x*y)
-    # C <- outer(
-    #   1:n, set_c,
-    #   Vectorize( function(i,j) f(X[i,], X[j,]) )
-    # )
-    # --------------------------------------------------------
-    # C <- RBF_kernel_C(X, c, set_c)
-    C <- RBF_kernel_C_parallel(X, c, set_c)
-    # --------------------------------------------------------
-    W <- C[set_c,]
-    SVD_W <- RSpectra::svds(A=W, k=l)
-    if (dim.reduction) {
-      R <- C %*% SVD_W$u %*% diag(1/sqrt(SVD_W$d))
-      SVD_R <- svds(A=R, k=s) 
-      X_ <- R %*% SVD_R$v # B
-    } else {
-      X_ <- C %*% SVD_W$u # %*% diag(1/SVD_W$d)
-      # lambda_ <- 1/SVD_W$d
-    }
-  } else{
-    # O(n^2) spoce-, O(n^3) time-complexity
-    gram.mat <- makeK_noparallel(X, kernel_type = kernel_type)
-    res = RSpectra::eigs_sym(gram.mat, c, which = "LM")
-    # CLIP NEGATIVE
-    if(!is.null(eig_clip)){
-      res$values[res$values < eig_clip] <- eig_clip
-    }
-    X_ <- if(is.null(U.mat)) {
-      res$vectors %*% diag(1/sqrt(res$values))
-    } else{
-      U.mat %*% diag(1/sqrt(res$values))
-    }
-  }
-  return(X_)
-}
-
-makeK_noparallel <- function(allx, useasbases=NULL, b=NULL, linkernel = FALSE, scale = TRUE,
-                             kernel_type = 'rbfdot'){
-  N=nrow(allx)
-  # If no "useasbasis" given, assume all observations are to be used.
-  if(is.null(useasbases)) {useasbases = rep(1, N)}
-  
-  #default b is set to 2ncol to match kbal for now
-  if (is.null(b)){ b=2*ncol(allx) }
-  
-  if(scale) {
-    allx = scale(allx)
-  } 
-  bases = allx[useasbases==1, ]
-  
-  if (linkernel == TRUE) {
-    K <- allx  # Linear kernel case
-  } else {
-    if (sum(useasbases) == N) {
-      if (kernel_type == "rbfdot") {
-        K <- kernlab::kernelMatrix(kernlab::rbfdot(), allx)
-      } else if (kernel_type == "vanilladot") {
-        K <- kernlab::kernelMatrix(kernlab::vanilladot(), allx)
-      } else {
-        stop("Invalid kernel_type. Choose 'rbfdot' or 'vanilladot'.")
-      }
-    } 
-  }
-  return(K)
-}
-
-make_partition <- function(n, subsets, b, disjoint = TRUE){
-  part_idx <- seq(1, n, by = 1)
-  if(disjoint){
-    # Generate disjoint sets
-    # Permute indices
-    partition <- sample(part_idx, n)
-    totality <- b*subsets
-    stopifnot(totality <= n)
-    # Exclude rest of sample
-    partition <- partition[1:totality]
-    partition <- split(partition, f = rep(1:subsets, each = b))
-  } else{
-    partition <- replicate(subsets, {
-      sample(part_idx, size = b, replace = FALSE)
-    }, simplify = FALSE)
-  }
-  partition
-}
-
-# From JOSE paper
-osqp_kernel_sbw_twofit <- function(X,A,Y,
-                                   delta.v=0.005, 
-                                   X_=NULL,
-                                   osqp.setting=NULL,
-                                   basis="kernel", kernel.approximation=TRUE,
-                                   c = NULL, l=NULL, gamma=NULL, U.mat = NULL,
-                                   dim.reduction=FALSE, s=NULL,
-                                   K=2, interactions=FALSE, kernel_type = 'rbfdot',
-                                   eig_clip = NULL) {
-  
-  #------------------------------------------------------------------------------------------
-  # @X: covariates (n x d matrix)
-  # @A: treatment (n x 1 vector)
-  # @Y: outcome (n x 1 vector)
-  # @X_: the basis matrix where (approximate) mean balancing between the treated and control groups is to be achieved
-  #      (ncol(X_) = n)
-  # @osqp.setting: osqp settings
-  # @delta.v: tolerance level (either a single number or a numeric vector);
-  #           the numeric vector is used for multiple iterations, each with different tolerance level
-  # @basis: support kernel- or power series- (moment-) based constructions
-  # + kernel basis (basis=='kernel')
-  #     @kernel.approximation: if TRUE, use the Nystrom kernel approximation method proposed in \insertRef{wang2019scalable}
-  #                            if FALSE, use the full gram matrix to compute eigenvectors as in \insertRef{hazlett2018}
-  #     @c: sketch size for the standard Nystrom approximation. 
-  #     @l: regularization parameter l < c. 
-  #     @s: target rank for s < l the rank-restricted Nyström approximation
-  #     @gamma: RBK parameter; set default value as 1/(2*dim(X))
-  #     @U.mat: externel input for nxc eigenvector matrix; only used when kernel.approximation==FALSE
-  # + power series basis (basis=='power')
-  #     @K: use up to the K-th moment
-  #     @interactions: add up to the K-th order interaction terms if TRUE
-  #------------------------------------------------------------------------------------------
-  
-  
-  res.list <- list()
-  if (is.null(X_)) {
-    if (basis=="kernel"){
-      X_ <- kernel.basis(X,A,Y, 
-                         kernel.approximation=kernel.approximation, 
-                         c=c, l=l, gamma=gamma, U.mat=U.mat,
-                         s=s, dim.reduction=dim.reduction, kernel_type = kernel_type,
-                         eig_clip = eig_clip)
-    } 
-    
-    else if (basis=="power") {
-      X_ <- power.basis(X,A,Y, 
-                        K=K, interactions=interactions)
-    } 
-    
-    else {
-      stop("not available yet")
-    }
-  }
-  
-  nX <- ncol(X_)
-  n1 <- sum(A); n0 <- sum(1-A)
-  Xt <- X_[A==1,]; Xc <- X_[A==0,]
-  Yt <- Y[A==1]; Yc <- Y[A==0]
-  
-  # Xc_df <- as.data.frame(Xc)
-  # Xt_df <- as.data.frame(Xt)
-  # model_c <- lm(Yc ~ ., data = Xc_df)
-  # model_t <- lm(Yt ~ ., data = Xt_df)
-  # 
-  # X_df <- as.data.frame(X_)
-  # colnames(X_df) <- colnames(Xt_df)
-  # 
-  # m0 <- predict(model_c, newdata = X_df)
-  # m1 <- predict(model_t, newdata = X_df)
-  m0 <- 0
-  m1 <- 1
-  
-  P.mat0 <- as(Matrix::.symDiagonal(n=n0, x=1.), "dgCMatrix")
-  q.vec0 <- rep(-1./n0,n0)
-  
-  P.mat1 <- as(Matrix::.symDiagonal(n=n1, x=1.), "dgCMatrix")
-  q.vec1 <- rep(-1./n1,n1)
-  
-  A.mat0 <- Matrix::Matrix(rbind(rep(1.,n0),
-                                 P.mat0,
-                                 t(Xc)), sparse = TRUE)
-  A.mat1 <- Matrix::Matrix(rbind(rep(1.,n1),
-                                 P.mat1,
-                                 t(Xt)), sparse = TRUE)
-  
-  if (is.null(osqp.setting)) {
-    # use default one
-    settings <- osqp::osqpSettings(alpha = 1.5, verbose = FALSE)  
-  } else {
-    settings <- osqp.setting
-  }
-  
-  for (j in 1:length(delta.v)) {
-    l.vec0 <- c(1., rep(0.,n0),
-                colMeans(X_) - delta.v[j] * rep(1,nX))
-    u.vec0 <- c(1., rep(1.,n0),
-                colMeans(X_) + delta.v[j] * rep(1,nX))
-    
-    l.vec1 <- c(1., rep(0.,n1),
-                colMeans(X_) - delta.v[j] * rep(1,nX))
-    u.vec1 <- c(1., rep(1.,n1),
-                colMeans(X_) + delta.v[j] * rep(1,nX))
-    if (j==1) {
-      model0 <- osqp::osqp(P.mat0, q.vec0, A.mat0, l.vec0, u.vec0, settings)
-      model1 <- osqp::osqp(P.mat1, q.vec1, A.mat1, l.vec1, u.vec1, settings)
-    } else {
-      model$Update(l = l.vec, u = u.vec)
-    }
-    res0 <- model0$Solve()
-    res1 <- model1$Solve()
-    # if (res$info$status != "solved") {
-    #   warning(res$info$status)
-    # }
-    res.list[[j]] <- list(res0 = res0, res1 = res1, m0 = m0, m1 = m1)
-  }
-  return(res.list)
-}
-
-train_aol <- function(dat, formula, A, y){
-  # mu_y <- lm(y ~ x1 + x2 + x3 + x4 + x5 + A + A:x1 + A:x2, data = dat)
-  mu_y <- lm(as.formula(formula), data = dat)
-  
-  pred_dat <- copy(dat)
-  pred_dat[[A]] <- -1
-  mu_y0 <- predict(mu_y, pred_dat)
-  
-  pred_dat <- copy(dat)
-  pred_dat[[A]] <- 1
-  mu_y1 <- predict(mu_y, pred_dat)
-  
-  g_tilde <- dat[[y]] - (0.5 * mu_y0 + 0.5 * mu_y1)
-  
-  return(g_tilde)
-}
-
-truncate_to_n <- function(number, n) {
-  factor <- 10^n
-  truncated <- trunc(number * factor) / factor
-  return(truncated)
-}
-
-zip_plots <- function(data, zip_labels, n, use_case, image_path, plot_title, te,
-                      type = 'full', text_x = 0.75, text_y = 50){
-  if(data.table::is.data.table(data) == FALSE){
-    data <- data.table::as.data.table(data)
-  }
-
-  nm_prefix <- paste0(use_case, '_zip_plot_n', n)
-  ggsub <- data[n == n]
-  label_sub <- zip_labels[n == n]
-  title <- bquote(paste(.(plot_title), ' ', n == .(n)))
-  
-  # if(type == 'full'){
-  #   nm <- paste0(nm_prefix, '_full.pdf')
-  #   title <- bquote(paste(plot_title, ' ', n == .(n)))
-  #   ggsub <- data[n == n]
-  #   label_sub <- zip_labels[n == n]
-  #   
-  # } else{
-  #   nm <- paste0(nm_prefix, '_subset_', subsets, '_gamma_', gamma, '_cblb.pdf')
-  #   title <- bquote(paste(.(plot_title), ' ', s == .(subsets), ' and ', gamma == .(gamma), ' and ', n == .(n)))
-  #   ggsub <- data[n == n & subsets == subsets & gamma == gamma]
-  #   label_sub <- zip_labels[n == n & subsets == subsets & gamma == gamma]
-  # }
-  nm <- paste0(nm_prefix, '_', type, '.pdf')
-  p <- ggplot2::ggplot(ggsub, ggplot2::aes(y = rank)) +
-    ggplot2::geom_segment(ggplot2::aes(x = lower_ci, y = rank, xend = upper_ci, yend = rank, color = covered)) +
-    ggplot2::geom_vline(ggplot2::aes(xintercept = te), color = 'yellow', size = 0.5, linetype = 'dashed') +
-    ggplot2::ylab('Fractional Centile of |z|') +
-    ggplot2::xlab('95% Confidence Intervals') +
-    ggplot2::theme_bw() +
-    ggplot2::scale_y_continuous(breaks = c(5, 50, 95)) +
-    ggplot2::scale_color_discrete(name = "Coverage") +
-    ggplot2::geom_text(x = text_x, y = text_y, ggplot2::aes(label = perc_cover), data = label_sub, size = 4) +
-    ggplot2::ggtitle(title)
-  
-  if(type == 'full'){
-    p <- p + ggplot2::facet_grid(n ~ ., labeller = ggplot2::label_both)
-  } else{
-    p <- p + ggplot2::facet_grid(n ~ subsets, labeller = ggplot2::label_both)
-  }
-  
-  ggplot2::ggsave(file.path(image_path, nm), plot = p, height = 9, width = 7)
-}
-
-zip_plots_helper <- function(data, type, te){
-  data[, `:=`(cent = abs(estim - te)/se)]
-  if(type == 'full'){
-    group_cols <- c('n')
-  } else{
-    group_cols <- c('n', 'gamma', 'subsets')
-  }
-  data[, `:=`(rank = as.integer(cut(cent, quantile(cent, probs = seq(0, 1, by = 0.01)), include.lowest = TRUE))), 
-      by = group_cols]
-  
-  data[, `:=`(n = format(n, scientific = FALSE, big.mark = ','),
-             covered = fifelse(lower_ci <= te & upper_ci >= te, 'Coverer', 'Non-coverer'))]
-  zip_labels <- data[, .(perc_cover = round(mean(covered == 'Coverer'), 3)), by = group_cols]
-  
-  return(list(zip = data, zip_labels = zip_labels))
-}
+# 
 

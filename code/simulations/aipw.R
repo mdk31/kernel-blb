@@ -59,7 +59,8 @@ if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
       set.seed(rp)
       dat <- kangschafer3(n = n, te = te, sigma = sigma, beta_overlap = 0.5)
       return(causal_blb_aipw(data = dat, y = 'y', Tr = 'Tr', confounders = c('X1', 'X2'),
-                             b = b, subsets = subsets, degree1, degree2, k1, k2, operator, penal))
+                             b = b, subsets = subsets, disjoint = TRUE, weight_function = aipw_kernel_weights,
+                             balance_treated = FALSE, degree1, degree2, k1, k2, operator, penal))
     }, cl = 1)
     
     out <- rbindlist(out)
