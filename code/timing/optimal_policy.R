@@ -1,7 +1,6 @@
 library(pbapply)
 library(data.table)
 
-# TODO: install kernel packages
 source('code/helper_functions.R')
 
 te <- 0.8
@@ -43,15 +42,16 @@ if(file.exists(file.path(temp_dir, 'full_bootstrap.rds'))){
     out <- pblapply(seq_len(replications), function(rp){
       set.seed(rp)
       dat <- aol_dgp(n = n)
+      pi_1 <- rep(0.5, nrow(dat))
       lambda <- 0.01
-      initial_params <- c(rep(0, n), 0)  # Initial v and b
+      initial_params <- c(rep(0, n), 0) 
       timing <- system.time({
         estim_opt_regime <- estimate_optimal_regime(data = dat, 
                                                     r_tilde_form = y ~ x1 + x2 + x3 + x4 + x5 + A + A:x1 + A:x2, 
                                                     covariates = c('x1', 'x2', 'x3', 'x4', 'x5'), 
                                                     A = 'A', y = 'y', 
                                                     initial_params = initial_params, 
-                                                    lambda = lambda)
+                                                    lambda = lambda, pi_1 = pi_1)
         M <- rmultinom(n = B, size = n, prob = rep(1, n))
         
         boot_reps <- sapply(seq_len(B), function(bt){
@@ -85,6 +85,7 @@ if(file.exists(file.path(temp_dir, 'scaling_bootstrap.rds'))){
     out <- pblapply(seq_len(replications), function(rp){
       set.seed(rp)
       dat <- aol_dgp(n = n)
+      pi_1 <- rep(0.5, nrow(dat))
       lambda <- 0.01
       initial_params <- c(rep(0, n), 0)  # Initial v and b
       timing <- system.time({
@@ -93,7 +94,7 @@ if(file.exists(file.path(temp_dir, 'scaling_bootstrap.rds'))){
                                                     covariates = c('x1', 'x2', 'x3', 'x4', 'x5'), 
                                                     A = 'A', y = 'y', 
                                                     initial_params = initial_params, 
-                                                    lambda = lambda)
+                                                    lambda = lambda, pi_1 = pi_1)
         M <- rmultinom(n = B, size = n, prob = rep(1, n))
         
         boot_reps <- sapply(seq_len(B), function(bt){
@@ -134,13 +135,12 @@ if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
       dat <- aol_dgp(n = n)
       timing <- system.time({
         causal_blb_policy(data = dat,
-                               y = 'y',
-                               A = 'A',
-                               r_tilde_form = y ~ x1 + x2 + x3 + x4 + x5 + A + A:x1 + A:x2,
-                               covariates = c('x1', 'x2', 'x3', 'x4', 'x5'),
-                               initial_params =  c(rep(0, b), 0),
-                               lambda = 0.01,
-                               b = b, subsets = subsets)
+                          y = 'y',
+                          A = 'A',
+                          r_tilde_form = y ~ x1 + x2 + x3 + x4 + x5 + A + A:x1 + A:x2,
+                          covariates = c('x1', 'x2', 'x3', 'x4', 'x5'),
+                          initial_params =  c(rep(0, b), 0),
+                          lambda = 0.01,b = b, subsets = subsets)
       })
     return(data.table(time_elapsed = timing['elapsed']))
     }, cl = 1)
@@ -153,7 +153,7 @@ if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
   saveRDS(cblb, file.path(temp_dir, 'cblb_bootstrap.rds'))
 }
 
-box_plots(full, cblb, 'policy', title = 'AOL', img_tmp_dir)
+box_plots(full, cblb, 'policy', title = 'Kernelized AOL', img_tmp_dir)
 
 # one off scaling plot
 library(ggplot2)
@@ -161,7 +161,7 @@ library(ggplot2)
 p <- ggplot(scaling, aes(x = factor(n), y = time_elapsed)) +
   geom_boxplot() +
   labs(
-    title = 'Full bootstrap, AOL, by n size',
+    title = 'Full bootstrap, Kernelized AOL, by n size',
     x = "n",
     y = "Execution Time (seconds)"
   ) +

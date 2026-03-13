@@ -100,7 +100,8 @@ if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
       dat <- kangschafer3(n = n, te = te, sigma = sigma, beta_overlap = 0.5)
       timing <- system.time({
         causal_blb_aipw(data = dat, y = 'y', Tr = 'Tr', confounders = c('X1', 'X2'),
-                        b = b, subsets = subsets, degree1, degree2, k1, k2, operator, penal)
+                        b = b, subsets = subsets, disjoint = TRUE, weight_function = aipw_kernel_weights,
+                        balance_treated = FALSE, degree1, degree2, k1, k2, operator, penal)
       })
       return(data.table(time_elapsed = timing['elapsed']))
     }, cl = 1)
@@ -113,4 +114,4 @@ if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
   saveRDS(cblb, file.path(temp_dir, 'cblb_bootstrap.rds'))
 }
 
-box_plots(full, cblb, 'aipw', title = 'AIPW', img_tmp_dir)
+box_plots(full, cblb, 'aipw', title = 'Kernel Minimax Weights', img_tmp_dir)

@@ -21,11 +21,19 @@ aipw_kernel_weights <- function(data, Tr, Y, confounder_names, degree1, degree2,
   n1 <- sum(X$intervention == 1)
   n0 <- sum(X$intervention == 0)
   
+  # --- NEW: normalize y within treatment groups (always) ---
+  y0_mean <- mean(y0, na.rm = TRUE); y0_sd <- stats::sd(y0, na.rm = TRUE)
+  y1_mean <- mean(y1, na.rm = TRUE); y1_sd <- stats::sd(y1, na.rm = TRUE)
+  if(!is.finite(y0_sd) || y0_sd <= 0) y0_sd <- 1
+  if(!is.finite(y1_sd) || y1_sd <= 0) y1_sd <- 1
+  # --- END NEW ---
+  
   mX0 <- data.matrix(X0t[, 1:(dim(X0t)[2]-2)])
   mX1 <- data.matrix(X1t[, 1:(dim(X1t)[2]-2)])
   
-  mY0 <- as.matrix(y0)
-  mY1 <- as.matrix(y1)
+  # --- CHANGED: fit GP on normalized outcomes ---
+  mY0 <- as.matrix((y0 - y0_mean) / y0_sd)
+  mY1 <- as.matrix((y1 - y1_mean) / y1_sd)
   
   pyX0   <- np_array(np$array(mX0), dtype = "float")
   pyX1   <- np_array(np$array(mX1), dtype = "float")
@@ -57,8 +65,11 @@ aipw_kernel_weights <- function(data, Tr, Y, confounder_names, degree1, degree2,
   K1 <- res.optim2_1$gpr$kernel_(matrix_eva)
   K0 <- res.optim2_0$gpr$kernel_(matrix_eva)
   
+  # --- CHANGED: predict, then unnormalize back to original y scale ---
   p1 <- as.numeric(res.optim2_1$gpr$predict(matrix_eva))
   p0 <- as.numeric(res.optim2_0$gpr$predict(matrix_eva))
+  p1 <- p1 * y1_sd + y1_mean
+  p0 <- p0 * y0_sd + y0_mean
   
   V <- rep(1/n, n)
   
@@ -78,6 +89,11 @@ aipw_kernel_weights <- function(data, Tr, Y, confounder_names, degree1, degree2,
   
   sigma1 <- res.optim2_1$par[3]^2
   sigma0 <- res.optim2_0$par[3]^2
+  
+  # --- NEW: put sigma back on original y scale ---
+  sigma1 <- sigma1 * (y1_sd^2)
+  sigma0 <- sigma0 * (y0_sd^2)
+  # --- END NEW ---
   
   Sigma <- sigma1*diag(t1) + sigma0*diag(t0)
   #Update Q
@@ -113,16 +129,122 @@ aipw_kernel_weights <- function(data, Tr, Y, confounder_names, degree1, degree2,
   phi1 <- (data[[Tr]])*res$solution*(data[[Y]] - p1) + p1
   
   return(list(phi1 = phi1, phi0 = phi0, tau_hat = mean(phi1 - phi0)))
-  
 }
+
+
+aol_dgp <- function(n){
+  # Copied from paper
+  X <- lapply(1:5, function(i){
+    dt <- data.frame(runif(n, -1, 1))
+    names(dt) <- paste0('x', i)
+    dt
+  })
+  X <- do.call(cbind, X)
+  A <- ifelse(rbinom(n, size = 1, prob = 0.5) == 1, 1, -1)
+  mu_y <- 0.5 + as.matrix(X) %*% c(0.5, 0.8, 0.3, -0.5, 0.7) + A*(0.2 - 0.6*X$x1 - 0.8*X$x2)
+  y <- rnorm(n, mean = mu_y[, 1])
+  X$y <- y
+  X$A <- (A + 1)/2 # convert back to 0/1
+  return(X)
+}
+
+aol_loss <- function(params, X, A, r_tilde, K_matrix, lambda) {
+  n <- length(A)
+  v <- params[1:n]  # Extract v coefficients
+  b <- params[n+1]   # Extract intercept
+
+  f_x <- K_matrix %*% v + b
+
+  hinge_loss <- huber_hinge(A * sign(r_tilde) * f_x)
+
+  loss_term <- mean(abs(r_tilde) / 0.5 * hinge_loss)
+  reg_term <- (lambda / 2) * sum(v %*% K_matrix %*% v)
+
+  return(loss_term + reg_term)
+}
+
+box_plots <- function(full, cblb, use_case, title, image_dir){
+  full[, `:=`(type = 'Full Bootstrap')]
+  cblb[, `:=`(type = paste0('cBLB, subsets = ', subsets, ', gamma = ', gamma))]
+  cblb[, `:=`(subsets = NULL, gamma = NULL)]
+  timing_df <- data.table::rbindlist((list(cblb, full)))
+  filename <- paste0(use_case, ".pdf")
+
+  p <- ggplot2::ggplot(timing_df, ggplot2::aes(x = type, y = time_elapsed)) +
+    ggplot2::geom_boxplot() +
+    ggplot2::labs(
+      title = paste0("Timing Results by Method, ", title),
+      x = "Method",
+      y = "Execution Time (seconds)"
+    ) +
+    ggplot2::theme_minimal() +
+    ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1))
+
+  ggplot2::ggsave(filename = file.path(image_dir, filename), plot = p, width = 8, height = 6)
+}
+
 
 calculate_gamma <- function(n, subsets){
   soln <- 1 - log(subsets)/log(n)
   return(truncate_to_n(soln, 5))
 }
 
+causal_blb <- function(data, y, Tr, confounders, b, subsets, disjoint = TRUE, K = 10,
+                       balance_treated = FALSE, return_ey0 = FALSE){
+  if(data.table::is.data.table(data) == FALSE){
+    data <- data.table::as.data.table(data)
+  }
+  n <- nrow(data)
+  partitions <- make_partition(n = n, subsets = subsets, b = b, disjoint = disjoint,
+                               balance_treated = balance_treated, treatment = data[[Tr]])
+  idx <- seq_len(b)
+
+  blb_out <- lapply(partitions, function(i){
+    tmp_dat <- data[i]
+    folds <- split(idx, sample(rep(1:K, length.out = length(idx))))
+    crossfit <- crossfit_estimator(data = tmp_dat, y = y, Tr = Tr, confounders = confounders,
+                                   K = K)
+
+    M <- rmultinom(n = B, size = n, prob = rep(1, b))
+    blb_reps <- sapply(seq_len(B), function(bt){
+      phi1 <- M[, bt]*((crossfit[[Tr]]/crossfit$prop_score)*(crossfit[[y]] - crossfit$m1) + crossfit$m1)
+      phi0 <- M[, bt]*((1 - crossfit[[Tr]])/(1 - crossfit$prop_score)*(crossfit[[y]] - crossfit$m0) + crossfit$m0)
+      sum(phi1)/n - sum(phi0)/n
+    })
+    perc_ci <- boot:::perc.ci(blb_reps)
+    out_row <- data.table(lower_ci = perc_ci[4],
+                          upper_ci = perc_ci[5],
+                          estim = mean(blb_reps),
+                          se = sd(blb_reps))
+    if(return_ey0){
+      ey0_reps <- sapply(seq_len(B), function(bt){
+        phi0 <- M[, bt]*((1 - crossfit[[Tr]])/(1 - crossfit$prop_score)*(crossfit[[y]] - crossfit$m0) + crossfit$m0)
+        sum(phi0)/n
+      })
+      out_row[, ey0 := mean(ey0_reps)]
+    }
+    return(out_row)
+  })
+
+  blb_out <- rbindlist(blb_out)
+  if(return_ey0){
+    blb_out <- blb_out[, .(lower_ci = mean(lower_ci),
+                           upper_ci = mean(upper_ci),
+                           estim = mean(estim),
+                           se = mean(se),
+                           ey0 = mean(ey0))]
+  } else{
+    blb_out <- blb_out[, .(lower_ci = mean(lower_ci),
+                           upper_ci = mean(upper_ci),
+                           estim = mean(estim),
+                           se = mean(se))]
+  }
+  return(blb_out)
+}
+
 causal_blb_aipw <- function(data, y, Tr, confounders, b, subsets, disjoint = TRUE, 
-                            weight_function = aipw_kernel_weights, balance_treated = FALSE, ...){
+                            weight_function = aipw_kernel_weights, balance_treated = FALSE,
+                            return_ey0 = FALSE, ...){
   if(data.table::is.data.table(data) == FALSE){
     data <- data.table::as.data.table(data)
   }
@@ -145,20 +267,191 @@ causal_blb_aipw <- function(data, y, Tr, confounders, b, subsets, disjoint = TRU
       boot_phi0 <- M[, bt]*phi0
       sum(boot_phi1)/n - sum(boot_phi0)/n
     })
+    perc_ci <- boot:::perc.ci(blb_reps)
+    out_row <- data.table(lower_ci = perc_ci[4],
+                          upper_ci = perc_ci[5],
+                          estim = mean(blb_reps),
+                          se = sd(blb_reps))
+    if(return_ey0){
+      ey0_reps <- sapply(seq_len(B), function(bt){
+        boot_phi0 <- M[, bt]*phi0
+        sum(boot_phi0)/n
+      })
+      out_row[, ey0 := mean(ey0_reps)]
+    }
+    return(out_row)
+  })
+  
+  blb_out <- rbindlist(blb_out)
+  if(return_ey0){
+    blb_out <- blb_out[, .(lower_ci = mean(lower_ci),
+                           upper_ci = mean(upper_ci),
+                           estim = mean(estim),
+                           se = mean(se),
+                           ey0 = mean(ey0))]
+  } else{
+    blb_out <- blb_out[, .(lower_ci = mean(lower_ci),
+                           upper_ci = mean(upper_ci),
+                           estim = mean(estim),
+                           se = mean(se))]
+  }
+  return(blb_out)
+}
+
+causal_blb_policy <- function(data, y, A, b, subsets, lambda, initial_params, r_tilde_form, covariates,
+                              disjoint = TRUE, balance_treated = FALSE, boundary = 0, 
+                              randomized = TRUE){
+  if(data.table::is.data.table(data) == FALSE){
+    data <- data.table::as.data.table(data)
+  }
+  n <- nrow(data)
+  partitions <- make_partition(n = n, subsets = subsets, b = b, disjoint = disjoint,
+                               balance_treated = TRUE, treatment = data[[A]])
+  idx <- seq_len(b)
+  # convert to -1 to 1
+  data[[A]] <- 2*data[[A]] - 1
+
+  blb_out <- lapply(partitions, function(i){
+    tmp_dat <- data[i]
+    if (randomized) {
+      pi_1 <- rep(0.5, nrow(tmp_dat))
+    } else {
+      ps_dat <- copy(tmp_dat)
+      ps_dat$A01 <- ifelse(ps_dat[[A]] == 1, 1, 0)
+      
+      ps_formula <- as.formula(
+        paste("A01 ~", paste(covariates, collapse = " + "))
+      )
+      ps_fit <- glm(ps_formula, data = ps_dat, family = binomial)
+      
+      # (minor robustness) be explicit about newdata
+      pi_1 <- predict(ps_fit, newdata = ps_dat, type = "response")
+      pi_1 <- pmin(pmax(pi_1, 1e-6), 1 - 1e-6)
+    }
     
+    pi_A <- ifelse(tmp_dat[[A]] == 1, pi_1, 1 - pi_1)
+
+    estim_opt_regime <- estimate_optimal_regime(data = tmp_dat,
+                                                r_tilde_form = r_tilde_form,
+                                                covariates = covariates,
+                                                A = A,
+                                                y = y,
+                                                initial_params = initial_params, lambda = lambda,
+                                                boundary = boundary,
+                                                pi_1 = pi_1)
+    M <- rmultinom(n = B, size = n, prob = rep(1, b))
+
+    blb_reps <- sapply(seq_len(B), function(bt){
+      sum(M[, bt]*tmp_dat[[y]]/pi_A*(tmp_dat[[A]] == estim_opt_regime))/n
+    })
+
     perc_ci <- boot:::perc.ci(blb_reps)
     return(data.table(lower_ci = perc_ci[4],
                       upper_ci = perc_ci[5],
                       estim = mean(blb_reps),
                       se = sd(blb_reps)))
   })
-  
+
   blb_out <- rbindlist(blb_out)
   blb_out <- blb_out[, .(lower_ci = mean(lower_ci),
                          upper_ci = mean(upper_ci),
                          estim = mean(estim),
                          se = mean(se))]
   return(blb_out)
+}
+
+crossfit_estimator <- function(data, y, Tr, confounders, K = 10){
+  if(data.table::is.data.table(data) == FALSE){
+    data <- data.table::as.data.table(data)
+  }
+
+  fold_idx <- seq_len(nrow(data))
+  folds <- split(fold_idx, sample(rep(1:K, length.out = length(fold_idx))))
+
+  m_formula <- as.formula(paste0(y, ' ~ ', Tr, ' + ', paste(confounders, collapse = ' + ')))
+  g_formula <- as.formula(paste0(Tr, ' ~ ', paste(confounders, collapse = ' + ')))
+
+  crossfit_dt <- lapply(folds, function(test_idx){
+    train_idx <- setdiff(fold_idx, test_idx)
+    train_dat <- data[train_idx]
+    test_dat <- data[-train_idx]
+
+    m <- e1071::svm(m_formula, data = train_dat, kernel = 'linear', type = 'eps-regression')
+    g <- e1071::svm(g_formula, data = train_dat, kernel = 'linear', type = 'C-classification', probability = TRUE)
+
+    prop_score <- attr(predict(g, newdata = test_dat, probability = TRUE), 'probabilities')[, '1']
+
+    confounder_data <- test_dat[, ..confounders]
+    newdata_1 <- data.frame(setNames(list(1), Tr), confounder_data)
+    newdata_0 <- data.frame(setNames(list(0), Tr), confounder_data)
+
+    m1 <- predict(m, newdata = newdata_1)
+    m0 <- predict(m, newdata = newdata_0)
+
+    test_dat$prop_score <- prop_score
+    test_dat$m1 <- m1
+    test_dat$m0 <- m0
+
+    test_dat
+  })
+  return(rbindlist(crossfit_dt))
+}
+
+estimate_optimal_regime <- function(data, r_tilde_form, covariates, A, y, initial_params, lambda,
+                                    boundary = 0, pi_1){
+
+  if(data.table::is.data.table(data) == FALSE){
+    data <- data.table::as.data.table(data)
+  }
+
+  num_params <- nrow(data)
+  X <- data[, c(covariates), with = FALSE]
+  Aval <- data[[A]]
+  K_matrix <- kernlab::kernelMatrix(kernlab::vanilladot(), data.matrix(X))
+  r_tilde <- train_aol(dat = data, formula = r_tilde_form, A = A, y = y, pi_1 = pi_1)
+
+  opt_result <- optim(
+    par = initial_params,
+    fn = aol_loss,
+    X = X,
+    A = Aval,
+    r_tilde = r_tilde,
+    K_matrix = K_matrix,
+    lambda = lambda,
+    method = "L-BFGS-B"
+  )
+
+  # Extract optimized parameters
+  v_opt <- opt_result$par[1:num_params]
+  b_opt <- opt_result$par[num_params + 1]
+  decision_boundary <- K_matrix %*% v_opt + b_opt
+  estim_opt_regime <- ifelse(decision_boundary > boundary, 1, -1)
+  return(estim_opt_regime)
+}
+# 
+huber_hinge <- function(u, delta = 1) {
+  ifelse(u >= 1, 0, ifelse(u >= -1, (1 - u)^2 / 4, -u))
+}
+
+train_aol <- function(dat, formula, A, y, pi_1){
+  # mu_y <- lm(y ~ x1 + x2 + x3 + x4 + x5 + A + A:x1 + A:x2, data = dat)
+  mu_y <- lm(as.formula(formula), data = dat)
+  
+  pred_dat <- copy(dat)
+  pred_dat[[A]] <- -1
+  mu_y0 <- predict(mu_y, pred_dat)
+  
+  pred_dat <- copy(dat)
+  pred_dat[[A]] <- 1
+  mu_y1 <- predict(mu_y, pred_dat)
+  
+  pi_1 <- pmin(pmax(pi_1, 1e-6), 1 - 1e-6)
+  pi_0 <- 1 - pi_1
+  
+  # Replace 0.5*µ0 + 0.5*µ1 with π0*µ0 + π1*µ1
+  g_tilde <- dat[[y]] - (pi_0 * mu_y0 + pi_1 * mu_y1)
+  
+  return(g_tilde)
 }
 
 kangschafer3 <- function(n, te, sigma, beta_overlap = 0.5){
@@ -605,149 +898,17 @@ zip_plots_helper <- function(data, type, te){
 #   )
 # }
 # 
-# aol_dgp <- function(n){
-#   # Copied from paper
-#   X <- lapply(1:5, function(i){
-#     dt <- data.frame(runif(n, -1, 1))
-#     names(dt) <- paste0('x', i)
-#     dt
-#   })
-#   X <- do.call(cbind, X)
-#   A <- ifelse(rbinom(n, size = 1, prob = 0.5) == 1, 1, -1)
-#   mu_y <- 0.5 + as.matrix(X) %*% c(0.5, 0.8, 0.3, -0.5, 0.7) + A*(0.2 - 0.6*X$x1 - 0.8*X$x2)
-#   y <- rnorm(n, mean = mu_y[, 1])
-#   X$y <- y
-#   X$A <- A
-#   return(X)
-# }
+
 # 
-# aol_loss <- function(params, X, A, r_tilde, K_matrix, lambda) {
-#   n <- length(A)
-#   v <- params[1:n]  # Extract v coefficients
-#   b <- params[n+1]   # Extract intercept
-#   
-#   f_x <- K_matrix %*% v + b
-#   
-#   hinge_loss <- huber_hinge(A * sign(r_tilde) * f_x)
-#   
-#   loss_term <- mean(abs(r_tilde) / 0.5 * hinge_loss)
-#   reg_term <- (lambda / 2) * sum(v %*% K_matrix %*% v)
-#   
-#   return(loss_term + reg_term)
-# }
-# 
-# box_plots <- function(full, cblb, use_case, title, image_dir){
-#   full[, `:=`(type = 'Full Bootstrap')]
-#   cblb[, `:=`(type = paste0('cBLB, subsets = ', subsets, ', gamma = ', gamma))]
-#   cblb[, `:=`(subsets = NULL, gamma = NULL)]
-#   timing_df <- data.table::rbindlist((list(cblb, full)))
-#   filename <- paste0(use_case, ".pdf")
-#   
-#   p <- ggplot2::ggplot(timing_df, ggplot2::aes(x = type, y = time_elapsed)) +
-#     ggplot2::geom_boxplot() +
-#     ggplot2::labs(
-#       title = paste0("Timing Results by Method, ", title),
-#       x = "Method",
-#       y = "Execution Time (seconds)"
-#     ) +
-#     ggplot2::theme_minimal() +
-#     ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1))
-#   
-#   ggplot2::ggsave(filename = file.path(image_dir, filename), plot = p, width = 8, height = 6)
-# }
+
+
+
 # 
 
 # 
-# causal_blb <- function(data, y, Tr, confounders, b, subsets, disjoint = TRUE, K = 10){
-#   if(data.table::is.data.table(data) == FALSE){
-#     data <- data.table::as.data.table(data)
-#   }
-#   n <- nrow(data)
-#   partitions <- make_partition(n = n, subsets = subsets, b = b, disjoint = disjoint)
-#   idx <- seq_len(b)
-#   
-#   blb_out <- lapply(partitions, function(i){
-#     tmp_dat <- data[i]
-#     folds <- split(idx, sample(rep(1:K, length.out = length(idx))))
-#     crossfit <- crossfit_estimator(data = tmp_dat, y = y, Tr = Tr, confounders = confounders,
-#                                    K = K)
-# 
-#     M <- rmultinom(n = B, size = n, prob = rep(1, b))
-#     blb_reps <- sapply(seq_len(B), function(bt){
-#       phi1 <- M[, bt]*((crossfit[[Tr]]/crossfit$prop_score)*(crossfit[[y]] - crossfit$m1) + crossfit$m1)
-#       phi0 <- M[, bt]*((1 - crossfit[[Tr]])/(1 - crossfit$prop_score)*(crossfit[[y]] - crossfit$m0) + crossfit$m0)
-#       sum(phi1)/n - sum(phi0)/n
-#     })
-#     
-#     perc_ci <- boot:::perc.ci(blb_reps)
-#     return(data.table(lower_ci = perc_ci[4],
-#                       upper_ci = perc_ci[5],
-#                       estim = mean(blb_reps),
-#                       se = sd(blb_reps)))
-#   })
-#   
-#   blb_out <- rbindlist(blb_out)
-#   blb_out <- blb_out[, .(lower_ci = mean(lower_ci),
-#                          upper_ci = mean(upper_ci),
-#                          estim = mean(estim),
-#                          se = mean(se))]
-#   return(blb_out)
-# }
 # 
 # 
-# 
-# causal_blb_policy <- function(data, y, A, b, subsets, lambda, initial_params, r_tilde_form, covariates,
-#                               disjoint = TRUE, boundary = 0){
-#   if(data.table::is.data.table(data) == FALSE){
-#     data <- data.table::as.data.table(data)
-#   }
-#   n <- nrow(data)
-#   partitions <- make_partition(n = n, subsets = subsets, b = b, disjoint = disjoint,
-#                                balance_treated = TRUE, treatment = data[[A]])
-#   idx <- seq_len(b)
-#   # convert to -1 to 1
-#   data[[A]] <- 2*data[[A]] - 1
-#   
-#   blb_out <- lapply(partitions, function(i){
-#     tmp_dat <- data[i]
-#     ps_dat <- copy(tmp_dat)
-#     ps_dat$A01 <- ifelse(ps_dat[[A]] == 1, 1, 0)
-#     ps_formula <- as.formula(
-#       paste("A01 ~", paste(covariates, collapse = " + "))
-#     )
-#     ps_fit <- glm(ps_formula, data = ps_dat, family = binomial)
-#     pi_1 <- predict(ps_fit, type = "response")
-#     pi_1 <- pmin(pmax(pi_1, 1e-6), 1 - 1e-6)
-#     pi_A <- ifelse(tmp_dat[[A]] == 1, pi_1, 1 - pi_1) 
-#     
-#     estim_opt_regime <- estimate_optimal_regime(data = tmp_dat, 
-#                                                 r_tilde_form = r_tilde_form, 
-#                                                 covariates = covariates, 
-#                                                 A = A,
-#                                                 y = y,
-#                                                 initial_params = initial_params, lambda = lambda,
-#                                                 boundary = boundary,
-#                                                 pi_1 = pi_1) 
-#     M <- rmultinom(n = B, size = n, prob = rep(1, b))
-# 
-#     blb_reps <- sapply(seq_len(B), function(bt){
-#       sum(M[, bt]*tmp_dat[[y]]/pi_A*(tmp_dat[[A]] == estim_opt_regime))/n
-#     })
-# 
-#     perc_ci <- boot:::perc.ci(blb_reps)
-#     return(data.table(lower_ci = perc_ci[4],
-#                       upper_ci = perc_ci[5],
-#                       estim = mean(blb_reps),
-#                       se = sd(blb_reps)))
-#   })
-#   
-#   blb_out <- rbindlist(blb_out)
-#   blb_out <- blb_out[, .(lower_ci = mean(lower_ci),
-#                          upper_ci = mean(upper_ci),
-#                          estim = mean(estim),
-#                          se = mean(se))]
-#   return(blb_out)
-# }
+
 # 
 # causal_blb_stable <- function(data, b, subsets, kernel_approx = TRUE, disjoint = TRUE, augment = FALSE,
 #                               delta.v = 1e-4, kernel_type = 'rbfdot', eig_clip = NULL){
@@ -807,78 +968,9 @@ zip_plots_helper <- function(data, type, te){
 #   return(blb_out)
 # }
 # 
-# crossfit_estimator <- function(data, y, Tr, confounders, K = 10){
-#   if(data.table::is.data.table(data) == FALSE){
-#     data <- data.table::as.data.table(data)
-#   }
-#   
-#   fold_idx <- seq_len(nrow(data))
-#   folds <- split(fold_idx, sample(rep(1:K, length.out = length(fold_idx))))
-#   
-#   m_formula <- as.formula(paste0(y, ' ~ ', Tr, ' + ', paste(confounders, collapse = ' + ')))
-#   g_formula <- as.formula(paste0(Tr, ' ~ ', paste(confounders, collapse = ' + ')))
-#   
-#   crossfit_dt <- lapply(folds, function(test_idx){
-#     train_idx <- setdiff(fold_idx, test_idx)
-#     train_dat <- data[train_idx]
-#     test_dat <- data[-train_idx]
-#     
-#     m <- e1071::svm(m_formula, data = train_dat, kernel = 'linear', type = 'eps-regression')
-#     g <- e1071::svm(g_formula, data = train_dat, kernel = 'linear', type = 'C-classification', probability = TRUE)
-#     
-#     prop_score <- attr(predict(g, newdata = test_dat, probability = TRUE), 'probabilities')[, 1]
-#     
-#     confounder_data <- test_dat[, ..confounders]
-#     newdata_1 <- data.frame(setNames(list(1), Tr), confounder_data)
-#     newdata_0 <- data.frame(setNames(list(0), Tr), confounder_data)
-#     
-#     m1 <- predict(m, newdata = newdata_1)
-#     m0 <- predict(m, newdata = newdata_0)
-#     
-#     test_dat$prop_score <- prop_score
-#     test_dat$m1 <- m1
-#     test_dat$m0 <- m0
-#     
-#     test_dat
-#   })
-#   return(rbindlist(crossfit_dt))
-# }
+
 # 
-# estimate_optimal_regime <- function(data, r_tilde_form, covariates, A, y, initial_params, lambda,
-#                                     boundary = 0, pi_1){
-#   
-#   if(data.table::is.data.table(data) == FALSE){
-#     data <- data.table::as.data.table(data)
-#   }
-#   
-#   num_params <- nrow(data)
-#   X <- data[, c(covariates), with = FALSE]
-#   Aval <- data[[A]]
-#   K_matrix <- kernlab::kernelMatrix(kernlab::vanilladot(), data.matrix(X))
-#   r_tilde <- train_aol(dat = data, formula = r_tilde_form, A = A, y = y, pi_1 = pi_1)
-#   
-#   opt_result <- optim(
-#     par = initial_params,
-#     fn = aol_loss,
-#     X = X,
-#     A = Aval,
-#     r_tilde = r_tilde,
-#     K_matrix = K_matrix,
-#     lambda = lambda,
-#     method = "L-BFGS-B"
-#   )
-#   
-#   # Extract optimized parameters
-#   v_opt <- opt_result$par[1:num_params]
-#   b_opt <- opt_result$par[num_params + 1]
-#   decision_boundary <- K_matrix %*% v_opt + b_opt
-#   estim_opt_regime <- ifelse(decision_boundary > boundary, 1, -1)
-#   return(estim_opt_regime)
-# }
-# 
-# huber_hinge <- function(u, delta = 1) {
-#   ifelse(u >= 1, 0, ifelse(u >= -1, (1 - u)^2 / 4, -u))
-# }
+
 # 
 # 
 # 
@@ -1198,27 +1290,7 @@ zip_plots_helper <- function(data, type, te){
 #   return(res.list)
 # }
 # 
-# train_aol <- function(dat, formula, A, y, pi_1){
-#   # mu_y <- lm(y ~ x1 + x2 + x3 + x4 + x5 + A + A:x1 + A:x2, data = dat)
-#   mu_y <- lm(as.formula(formula), data = dat)
-#   
-#   pred_dat <- copy(dat)
-#   pred_dat[[A]] <- -1
-#   mu_y0 <- predict(mu_y, pred_dat)
-#   
-#   pred_dat <- copy(dat)
-#   pred_dat[[A]] <- 1
-#   mu_y1 <- predict(mu_y, pred_dat)
-#   
-#   pi_1 <- pmin(pmax(pi_1, 1e-6), 1 - 1e-6)
-#   pi_0 <- 1 - pi_1
-#   
-#   # Replace 0.5*µ0 + 0.5*µ1 with π0*µ0 + π1*µ1
-#   g_tilde <- dat[[y]] - (pi_0 * mu_y0 + pi_1 * mu_y1)
-#   
-#   return(g_tilde)
-# }
-# 
 
 # 
 
+# 

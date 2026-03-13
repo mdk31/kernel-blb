@@ -133,4 +133,4 @@ if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
   saveRDS(cblb, file.path(temp_dir, 'cblb_bootstrap.rds'))
 }
 
-box_plots(full, cblb, 'dml_svm', title = 'DML', img_tmp_dir)
+box_plots(full, cblb, 'dml_svm', title = 'DML with SVM', img_tmp_dir)

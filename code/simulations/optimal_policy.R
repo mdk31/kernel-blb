@@ -44,7 +44,7 @@ if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
     subsets <- grid_val$subsets
     gamma <- grid_val$gamma
     b <- round(n^gamma)
-    
+
     out <- pblapply(seq_len(replications), function(rp){
       set.seed(rp)
       dat <- aol_dgp(n = n)
@@ -54,10 +54,9 @@ if(file.exists(file.path(temp_dir, 'cblb_bootstrap.rds'))){
                                r_tilde_form = y ~ x1 + x2 + x3 + x4 + x5 + A + A:x1 + A:x2,
                                covariates = c('x1', 'x2', 'x3', 'x4', 'x5'),
                                initial_params =  c(rep(0, b), 0),
-                               lambda = 0.01,
-                               b = b, subsets = subsets))
-    }, cl = 4)
-    
+                               lambda = 0.01,b = b, subsets = subsets))
+    }, cl = 1)
+
     out <- rbindlist(out)
     out[, `:=`(n = n, subsets = subsets, gamma = gamma)]
     out
@@ -73,7 +72,7 @@ for(idx in seq_len(nrow(grid_vals))){
   subsets <- grid_row$subsets
   gamma <- grid_row$gamma
   zip_plots(data = zip_plot_obj$zip, zip_labels = zip_plot_obj$zip_labels, n = n, 
-            type = 'cblb', use_case = 'policy', plot_title = 'Optimal value', te = optimal_val, image_path = img_tmp_dir, text_x = 0.89)
+            type = 'cblb', use_case = 'policy', plot_title = 'Kernelized AOL, optimal value', te = optimal_val, image_path = img_tmp_dir, text_x = 0.89)
 }
 
 

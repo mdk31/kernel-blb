@@ -78,6 +78,6 @@ for(idx in seq_len(nrow(grid_vals))){
   subsets <- grid_row$subsets
   gamma <- grid_row$gamma
   zip_plots(data = zip_plot_obj$zip, zip_labels = zip_plot_obj$zip_labels, n = n, 
-            type = 'cblb', use_case = 'aipw', plot_title = 'AIPW', 
+            type = 'cblb', use_case = 'aipw', plot_title = 'Kernel Minimax Weights', 
             te = te, image_path = img_tmp_dir, text_x = 0.89)
 }
